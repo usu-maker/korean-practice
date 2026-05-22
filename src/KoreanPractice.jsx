@@ -90,8 +90,10 @@ export default function App() {
           messages: history.map(m => ({ role: m.role, content: m.content })),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      let data;
+      try { data = await res.json(); } catch { throw new Error(`サーバーからの応答が不正です (HTTP ${res.status})`); }
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error) || `HTTP ${res.status}`);
+      if (!data.text) throw new Error(`textが空です: ${JSON.stringify(data).slice(0, 200)}`);
       const raw = data.text;
       const tts = extractTTS(raw);
       const display = cleanDisplay(raw);
