@@ -1,20 +1,19 @@
-// api/chat.js - Vercel Serverless Function (Gemini)
+// api/chat.js - Vercel Serverless Function (Gemini 2.5 Flash Lite)
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'サーバーへの接続方法が正しくありません' });
 
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY が設定されていません' });
+  if (!apiKey) return res.status(500).json({ error: 'APIキーが設定されていません。Vercelの環境変数を確認してください' });
 
   const { messages, system } = req.body;
   if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: 'messages が不正です' });
+    return res.status(400).json({ error: 'メッセージの形式が正しくありません' });
   }
 
-  // Gemini形式に変換（先頭がuserでないとエラーになるため調整）
   const contents = messages.map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
@@ -23,7 +22,7 @@ export default async function handler(req, res) {
   let geminiRes;
   try {
     geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -35,26 +34,44 @@ export default async function handler(req, res) {
       }
     );
   } catch (e) {
-    return res.status(500).json({ error: `Gemini接続失敗: ${e.message}` });
+    return res.status(500).json({ error: 'AIサーバーに接続できませんでした。しばらく待ってから再試行してください' });
   }
 
   let data;
   try {
     data = await geminiRes.json();
   } catch (e) {
-    return res.status(500).json({ error: `レスポンス解析失敗: ${e.message}` });
+    return res.status(500).json({ error: 'AIからの応答を読み取れませんでした。再試行してください' });
   }
 
-  // エラーレスポンスの場合
+  // エラーコードを日本語メッセージに変換
   if (!geminiRes.ok) {
-    const msg = data?.error?.message || JSON.stringify(data);
-    return res.status(geminiRes.status).json({ error: `Gemini APIエラー: ${msg}` });
+    const rawMsg = data?.error?.message || '';
+    const status = geminiRes.status;
+    let friendlyMsg;
+
+    if (status === 429 || rawMsg.includes('quota') || rawMsg.includes('Quota')) {
+      friendlyMsg = '利用制限に達しました。少し時間をおいてから再試行してください（無料枠の上限です）';
+    } else if (rawMsg.includes('high demand') || rawMsg.includes('overloaded')) {
+      friendlyMsg = 'AIサーバーが混雑しています。1〜2分後にもう一度試してください';
+    } else if (status === 400) {
+      friendlyMsg = '送信内容に問題があります。ページを再読み込みしてもう一度お試しください';
+    } else if (status === 401 || status === 403) {
+      friendlyMsg = 'APIキーが無効または期限切れです。Vercelの環境変数を確認してください';
+    } else if (status === 404) {
+      friendlyMsg = 'AIモデルが見つかりません。しばらく待ってから再試行してください';
+    } else if (status >= 500) {
+      friendlyMsg = 'AIサーバー側で問題が発生しています。しばらく待ってから再試行してください';
+    } else {
+      friendlyMsg = `AIとの通信でエラーが発生しました（コード: ${status}）。再試行してください`;
+    }
+
+    return res.status(status).json({ error: friendlyMsg });
   }
 
-  // テキスト抽出
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) {
-    return res.status(500).json({ error: `テキスト取得失敗。レスポンス: ${JSON.stringify(data).slice(0, 300)}` });
+    return res.status(500).json({ error: 'AIからの返答が空でした。もう一度話しかけてみてください' });
   }
 
   return res.status(200).json({ text });
