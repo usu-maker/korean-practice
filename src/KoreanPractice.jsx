@@ -53,6 +53,7 @@ export default function App() {
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [micState, setMicState] = useState("idle"); // idle | listening | unsupported
+  const [micLang, setMicLang] = useState("ko-KR"); // ko-KR | ja-JP
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const recRef = useRef(null);
@@ -62,7 +63,7 @@ export default function App() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { setMicState("unsupported"); return; }
     const r = new SR();
-    r.lang = "ja-JP"; r.continuous = false; r.interimResults = false;
+    r.lang = micLang; r.continuous = false; r.interimResults = false;
     r.onresult = e => { setInput(e.results[0][0].transcript); setMicState("idle"); };
     r.onerror = () => setMicState("idle");
     r.onend = () => setMicState("idle");
@@ -70,8 +71,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+    if (recRef.current) recRef.current.lang = micLang;
+  }, [micLang]);
+
+  useEffect(() => {
 
   const send = useCallback(async (text) => {
     if (!text.trim() || loading) return;
@@ -199,14 +202,23 @@ export default function App() {
               </button>
             ) : (
               <>
-                <button
-                  style={{ ...c.micBtn, background: micState === "listening" ? "#e85d6b" : "#f0d9d9", opacity: micState === "unsupported" ? 0.3 : 1 }}
-                  onClick={toggleMic}
-                  disabled={micState === "unsupported"}
-                  title={micState === "unsupported" ? "Chrome推奨" : micState === "listening" ? "停止" : "音声入力"}
-                >
-                  <span style={{ fontSize: 20 }}>{micState === "listening" ? "⏹" : "🎤"}</span>
-                </button>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                  <button
+                    style={{ ...c.micBtn, background: micState === "listening" ? "#e85d6b" : "#f0d9d9", opacity: micState === "unsupported" ? 0.3 : 1 }}
+                    onClick={toggleMic}
+                    disabled={micState === "unsupported"}
+                    title={micState === "unsupported" ? "Chrome推奨" : micState === "listening" ? "停止" : "音声入力"}
+                  >
+                    <span style={{ fontSize: 20 }}>{micState === "listening" ? "⏹" : "🎤"}</span>
+                  </button>
+                  <button
+                    style={{ border: "none", background: micLang === "ko-KR" ? "#e85d6b" : "#ddd", color: "#fff", borderRadius: 8, padding: "1px 5px", fontSize: 9, cursor: "pointer", fontWeight: 700 }}
+                    onClick={() => setMicLang(l => l === "ko-KR" ? "ja-JP" : "ko-KR")}
+                    title="音声入力言語を切り替え"
+                  >
+                    {micLang === "ko-KR" ? "한국어" : "日本語"}
+                  </button>
+                </div>
                 <textarea
                   ref={inputRef}
                   style={c.ta}
@@ -226,7 +238,7 @@ export default function App() {
             )}
           </div>
           {micState === "listening" && (
-            <div style={c.listenBar}>🎤 音声認識中… 話し終わると自動停止します</div>
+            <div style={c.listenBar}>🎤 {micLang === "ko-KR" ? "한국어" : "日本語"}で認識中… 話し終わると自動停止します</div>
           )}
         </div>
 
