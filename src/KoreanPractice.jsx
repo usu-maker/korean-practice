@@ -59,22 +59,29 @@ export default function App() {
   const recRef = useRef(null);
   const ttsOk = !!window.speechSynthesis;
 
+  // Speech Recognition の初期化
   useEffect(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { setMicState("unsupported"); return; }
     const r = new SR();
-    r.lang = micLang; r.continuous = false; r.interimResults = false;
+    r.lang = "ko-KR";
+    r.continuous = false;
+    r.interimResults = false;
     r.onresult = e => { setInput(e.results[0][0].transcript); setMicState("idle"); };
     r.onerror = () => setMicState("idle");
     r.onend = () => setMicState("idle");
     recRef.current = r;
   }, []);
 
+  // 言語切り替え時にrecognitionのlangを更新
   useEffect(() => {
     if (recRef.current) recRef.current.lang = micLang;
   }, [micLang]);
 
+  // 自動スクロール
   useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
   const send = useCallback(async (text) => {
     if (!text.trim() || loading) return;
@@ -94,9 +101,9 @@ export default function App() {
         }),
       });
       let data;
-      try { data = await res.json(); } catch { throw new Error(`サーバーからの応答が不正です (HTTP ${res.status})`); }
-      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error) || `HTTP ${res.status}`);
-      if (!data.text) throw new Error(`textが空です: ${JSON.stringify(data).slice(0, 200)}`);
+      try { data = await res.json(); } catch { throw new Error(`サーバーからの応答が読み取れませんでした (HTTP ${res.status})`); }
+      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : `エラーが発生しました (HTTP ${res.status})`);
+      if (!data.text) throw new Error("AIからの返答が空でした。もう一度話しかけてみてください");
       const raw = data.text;
       const tts = extractTTS(raw);
       const display = cleanDisplay(raw);
@@ -109,7 +116,7 @@ export default function App() {
       setMessages(prev => [...prev, { role: "assistant", content: display, tts }]);
       if (autoSpeak && tts) { setIsSpeaking(true); speakKorean(tts, () => setIsSpeaking(false)); }
     } catch (e) {
-      setMessages(prev => [...prev, { role: "assistant", content: `⚠️ エラー: ${e.message}` }]);
+      setMessages(prev => [...prev, { role: "assistant", content: `⚠️ ${e.message}` }]);
     } finally {
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 100);
@@ -202,7 +209,8 @@ export default function App() {
               </button>
             ) : (
               <>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                {/* マイクボタン＋言語切り替え */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0 }}>
                   <button
                     style={{ ...c.micBtn, background: micState === "listening" ? "#e85d6b" : "#f0d9d9", opacity: micState === "unsupported" ? 0.3 : 1 }}
                     onClick={toggleMic}
@@ -212,7 +220,17 @@ export default function App() {
                     <span style={{ fontSize: 20 }}>{micState === "listening" ? "⏹" : "🎤"}</span>
                   </button>
                   <button
-                    style={{ border: "none", background: micLang === "ko-KR" ? "#e85d6b" : "#ddd", color: "#fff", borderRadius: 8, padding: "1px 5px", fontSize: 9, cursor: "pointer", fontWeight: 700 }}
+                    style={micState === "unsupported" ? { display: "none" } : {
+                      border: "none",
+                      background: micLang === "ko-KR" ? "#e85d6b" : "#888",
+                      color: "#fff",
+                      borderRadius: 6,
+                      padding: "2px 5px",
+                      fontSize: 9,
+                      cursor: "pointer",
+                      fontWeight: 700,
+                      whiteSpace: "nowrap",
+                    }}
                     onClick={() => setMicLang(l => l === "ko-KR" ? "ja-JP" : "ko-KR")}
                     title="音声入力言語を切り替え"
                   >
@@ -238,7 +256,9 @@ export default function App() {
             )}
           </div>
           {micState === "listening" && (
-            <div style={c.listenBar}>🎤 {micLang === "ko-KR" ? "한국어" : "日本語"}で認識中… 話し終わると自動停止します</div>
+            <div style={c.listenBar}>
+              🎤 {micLang === "ko-KR" ? "한국어(韓国語)" : "日本語"}で認識中… 話し終わると自動停止します
+            </div>
           )}
         </div>
 
@@ -284,7 +304,7 @@ const c = {
   dot: { width: 7, height: 7, borderRadius: "50%", background: "#e85d6b", display: "inline-block", animation: "bounce 1.2s infinite" },
   quick: { padding: "6px 12px", display: "flex", gap: 6, flexWrap: "wrap", borderTop: "1px solid #f0d9d9", background: "#fff8f6", flexShrink: 0 },
   qBtn: { background: "#fff", border: "1px solid #e85d6b", color: "#e85d6b", borderRadius: 18, padding: "4px 11px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" },
-  inputArea: { padding: "9px 12px", background: "#fff", borderTop: "1px solid #f0d9d9", display: "flex", gap: 6, alignItems: "flex-end", flexShrink: 0 },
+  inputArea: { padding: "9px 12px", background: "#fff", borderTop: "1px solid #f0d9d9", display: "flex", gap: 6, alignItems: "center", flexShrink: 0 },
   micBtn: { border: "none", borderRadius: "50%", width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
   ta: { flex: 1, border: "1.5px solid #f0d9d9", borderRadius: 11, padding: "7px 10px", fontSize: 14, fontFamily: "inherit", resize: "none", outline: "none", lineHeight: 1.5, background: "#fdf6f0" },
   sendBtn: { background: "#e85d6b", color: "#fff", border: "none", borderRadius: 9, padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" },
