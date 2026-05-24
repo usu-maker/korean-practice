@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { CURRENT_VERSION, CHANGELOG } from "./version";
 
 const SYSTEM_PROMPT = `あなたは韓国語会話練習の先生「ソナ先生」です。ユーザーはハングル検定5級取得を目指す超初心者の日本人です。
 
@@ -59,6 +60,11 @@ export default function App() {
   const [micState, setMicState] = useState("idle"); // idle | listening | unsupported
   const [micLang, setMicLang] = useState("ko-KR"); // ko-KR | ja-JP
   const [retryInfo, setRetryInfo] = useState(null); // null | { countdown, attempt, max }
+  const [showChangelog, setShowChangelog] = useState(false);
+  const [isNewVersion] = useState(() => {
+    // 前回見たバージョンと異なれば「NEW」を表示
+    return localStorage.getItem("seen_version") !== CURRENT_VERSION;
+  });
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const recRef = useRef(null);
@@ -190,6 +196,18 @@ export default function App() {
             </button>
           )}
           <div style={c.badge}>5급</div>
+          {/* バージョンバッジ（クリックでチェンジログ表示） */}
+          <button
+            style={c.verBtn}
+            onClick={() => {
+              setShowChangelog(true);
+              localStorage.setItem("seen_version", CURRENT_VERSION);
+            }}
+            title="アップデート履歴を見る"
+          >
+            v{CURRENT_VERSION}
+            {isNewVersion && <span style={c.newDot} />}
+          </button>
         </div>
       </div>
 
@@ -314,6 +332,36 @@ export default function App() {
         </div>
       </div>
 
+      {/* チェンジログモーダル */}
+      {showChangelog && (
+        <div style={c.overlay} onClick={() => setShowChangelog(false)}>
+          <div style={c.modal} onClick={e => e.stopPropagation()}>
+            <div style={c.modalHeader}>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>📋 アップデート履歴</span>
+              <button style={c.closeBtn} onClick={() => setShowChangelog(false)}>✕</button>
+            </div>
+            <div style={c.modalBody}>
+              {CHANGELOG.map((entry, i) => (
+                <div key={entry.version} style={{ ...c.clEntry, ...(i === 0 ? c.clEntryLatest : {}) }}>
+                  <div style={c.clVerRow}>
+                    <span style={{ ...c.clVer, ...(i === 0 ? c.clVerLatest : {}) }}>
+                      v{entry.version}
+                    </span>
+                    {i === 0 && <span style={c.clLatestTag}>最新</span>}
+                    <span style={c.clDate}>{entry.date}</span>
+                  </div>
+                  <ul style={c.clList}>
+                    {entry.changes.map((ch, j) => (
+                      <li key={j} style={c.clItem}>• {ch}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -332,6 +380,8 @@ const c = {
   hSub: { fontSize: 10, opacity: 0.85 },
   iconBtn: { background: "rgba(255,255,255,.2)", border: "none", borderRadius: 18, padding: "3px 9px", fontSize: 15, cursor: "pointer", color: "#fff" },
   badge: { background: "#fff", color: "#e85d6b", fontWeight: 700, fontSize: 13, borderRadius: 16, padding: "3px 11px" },
+  verBtn: { position: "relative", background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.5)", color: "#fff", borderRadius: 12, padding: "3px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.02em" },
+  newDot: { position: "absolute", top: -3, right: -3, width: 8, height: 8, borderRadius: "50%", background: "#ffdd57", display: "inline-block", border: "1.5px solid #e85d6b" },
   body: { display: "flex", flex: 1, overflow: "hidden" },
   chatCol: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
   msgs: { flex: 1, overflowY: "auto", padding: "12px", display: "flex", flexDirection: "column", gap: 10 },
@@ -356,4 +406,19 @@ const c = {
   sideTitle: { fontSize: 12, fontWeight: 700, color: "#e85d6b", borderBottom: "1px solid #f0d9d9", paddingBottom: 6, marginBottom: 2 },
   sideEmpty: { fontSize: 11, color: "#ccc", lineHeight: 1.6, textAlign: "center", marginTop: 14 },
   vocabItem: { background: "#fff", border: "1px solid #f0d9d9", borderRadius: 7, padding: "4px 8px", fontSize: 11, lineHeight: 1.5, color: "#555" },
+  // チェンジログモーダル
+  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
+  modal: { background: "#fff", borderRadius: 16, width: "min(92vw, 420px)", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px rgba(0,0,0,.2)", overflow: "hidden" },
+  modalHeader: { background: "#e85d6b", color: "#fff", padding: "13px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 },
+  closeBtn: { background: "rgba(255,255,255,.2)", border: "none", color: "#fff", borderRadius: "50%", width: 28, height: 28, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
+  modalBody: { overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14 },
+  clEntry: { borderRadius: 10, padding: "11px 13px", background: "#fdf6f0", border: "1px solid #f0d9d9" },
+  clEntryLatest: { background: "#fff0f2", border: "1.5px solid #e85d6b" },
+  clVerRow: { display: "flex", alignItems: "center", gap: 7, marginBottom: 7 },
+  clVer: { fontWeight: 700, fontSize: 14, color: "#888" },
+  clVerLatest: { color: "#e85d6b" },
+  clLatestTag: { background: "#e85d6b", color: "#fff", borderRadius: 8, padding: "1px 7px", fontSize: 10, fontWeight: 700 },
+  clDate: { fontSize: 11, color: "#aaa", marginLeft: "auto" },
+  clList: { listStyle: "none", display: "flex", flexDirection: "column", gap: 4 },
+  clItem: { fontSize: 13, color: "#555", lineHeight: 1.6 },
 };
