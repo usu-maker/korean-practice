@@ -5,32 +5,30 @@ const SYSTEM_PROMPT = `あなたは韓国語会話練習の先生「ソナ先生
 
 ## ルール
 - 必ず韓国語で話しかける（シンプルな文章、5級レベル）
-- 返答は以下の形式で：
-  1. 韓国語の返答（短く、初級レベル）
-  2. 読み方（ひらがな）
-  3. 日本語訳
-  4. もし文法ミスがあれば優しく指摘
-  5. 次の会話につながる簡単な質問（韓国語＋読み方＋訳）
+- 返答は以下の形式で書くこと：
+
+1. 韓国語の返答（短く、初級レベル）
+2. 文法ミスがあれば韓国語で一言指摘
+3. 次の会話につながる質問（韓国語のみ）
+
+[JA]
+（上の韓国語内容の日本語訳をまとめて）
+[/JA]
+
+## 重要なルール
+- ひらがな・カタカナの読み方は一切書かない
+- 日本語は必ず [JA]〜[/JA] の中だけに書く
+- [JA] の外には韓国語のみ
 
 ## 5級レベルの目安
-- 基本あいさつ、自己紹介、数字、曜日、時間、基礎単語300語程度
+- 基本あいさつ、自己紹介、数字、曜日、時間、基礎単語300語程度`;
 
-## 音声読み上げのルール
-返答の最初の行に [TTS]韓国語のみ[/TTS] を必ず含めること。
-
-## 単語メモ
-重要な単語が出たら返答の最後に：
-📝 今日の単語: 単語（読み方）= 意味`;
-
-function extractTTS(t) {
-  const m = t.match(/\[TTS\]([\s\S]*?)\[\/TTS\]/);
+function extractJA(t) {
+  const m = t.match(/\[JA\]([\s\S]*?)\[\/JA\]/);
   return m ? m[1].trim() : null;
 }
-function cleanDisplay(t) {
-  return t.replace(/\[TTS\][\s\S]*?\[\/TTS\]\n?/, "").trim();
-}
-function extractVocab(t) {
-  return [...t.matchAll(/📝\s*今日の単語[：:]?\s*(.+)/g)].map(m => m[1].trim());
+function extractKorean(t) {
+  return t.replace(/\[JA\][\s\S]*?\[\/JA\]\n?/g, "").trim();
 }
 function speakKorean(text, onEnd) {
   if (!window.speechSynthesis) return;
@@ -48,51 +46,62 @@ const RETRY_WAIT_SEC = 3;
 export default function App() {
   const [messages, setMessages] = useState([{
     role: "assistant",
-    content: "안녕하세요！ 저는 소나 선생님이에요。\n(あんにょんはせよ！ じょのん そな そんせんにみえよ)\n\nはじめまして！ソナ先生です🌸\n「시작！」ボタンで会話を始めましょう！",
+    content: "안녕하세요！ 저는 소나 선생님이에요 🌸",
+    ja: "はじめまして！ソナ先生です。\n「시작！」ボタンで会話を始めましょう！",
+    showJA: true,
     isSystem: true,
   }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [started, setStarted] = useState(false);
-  const [vocab, setVocab] = useState([]);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [micState, setMicState] = useState("idle"); // idle | listening | unsupported
   const [micLang, setMicLang] = useState("ko-KR"); // ko-KR | ja-JP
   const [retryInfo, setRetryInfo] = useState(null); // null | { countdown, attempt, max }
   const [showChangelog, setShowChangelog] = useState(false);
-  const [isNewVersion] = useState(() => {
-    // 前回見たバージョンと異なれば「NEW」を表示
-    return localStorage.getItem("seen_version") !== CURRENT_VERSION;
+  const [isNewVersion] = useState(() => localStorage.getItem("seen_version") !== CURRENT_VERSION);
+
+  // 単語メモ（localStorage 永続化）
+  const [vocab, setVocab] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("korean_vocab") || "[]"); } catch { return []; }
   });
+  const [newWord, setNewWord] = useState("");
+  const [newMeaning, setNewMeaning] = useState("");
+
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const recRef = useRef(null);
   const ttsOk = !!window.speechSynthesis;
 
-  // Speech Recognition の初期化
+  // Speech Recognition 初期化
   useEffect(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { setMicState("unsupported"); return; }
     const r = new SR();
-    r.lang = "ko-KR";
-    r.continuous = false;
-    r.interimResults = false;
+    r.lang = "ko-KR"; r.continuous = false; r.interimResults = false;
     r.onresult = e => { setInput(e.results[0][0].transcript); setMicState("idle"); };
     r.onerror = () => setMicState("idle");
     r.onend = () => setMicState("idle");
     recRef.current = r;
   }, []);
 
-  // 言語切り替え時にrecognitionのlangを更新
-  useEffect(() => {
-    if (recRef.current) recRef.current.lang = micLang;
-  }, [micLang]);
+  useEffect(() => { if (recRef.current) recRef.current.lang = micLang; }, [micLang]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
+  useEffect(() => { localStorage.setItem("korean_vocab", JSON.stringify(vocab)); }, [vocab]);
 
-  // 自動スクロール
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  // 日本語訳トグル
+  const toggleJA = useCallback((idx) => {
+    setMessages(prev => prev.map((m, i) => i === idx ? { ...m, showJA: !m.showJA } : m));
+  }, []);
+
+  // 単語メモ操作
+  const addVocab = () => {
+    if (!newWord.trim()) return;
+    setVocab(prev => [...prev, { word: newWord.trim(), meaning: newMeaning.trim() }]);
+    setNewWord(""); setNewMeaning("");
+  };
+  const deleteVocab = (i) => setVocab(prev => prev.filter((_, idx) => idx !== i));
 
   const send = useCallback(async (text) => {
     if (!text.trim() || loading) return;
@@ -105,7 +114,6 @@ export default function App() {
     let lastError = null;
     try {
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        // 2回目以降はカウントダウン表示してから再試行
         if (attempt > 0) {
           for (let i = RETRY_WAIT_SEC; i > 0; i--) {
             setRetryInfo({ countdown: i, attempt, max: MAX_RETRIES });
@@ -113,7 +121,6 @@ export default function App() {
           }
           setRetryInfo(null);
         }
-
         try {
           const res = await fetch("/api/chat", {
             method: "POST",
@@ -125,38 +132,23 @@ export default function App() {
           });
           let data;
           try { data = await res.json(); } catch { throw Object.assign(new Error(`サーバーからの応答が読み取れませんでした (HTTP ${res.status})`), { retryable: true }); }
-
           if (!res.ok) {
             const errMsg = typeof data.error === "string" ? data.error : `エラーが発生しました (HTTP ${res.status})`;
-            // 400/401/403 は再試行しても無意味
-            const retryable = res.status !== 400 && res.status !== 401 && res.status !== 403;
-            throw Object.assign(new Error(errMsg), { retryable });
+            throw Object.assign(new Error(errMsg), { retryable: res.status !== 400 && res.status !== 401 && res.status !== 403 });
           }
           if (!data.text) throw Object.assign(new Error("AIからの返答が空でした。もう一度話しかけてみてください"), { retryable: true });
 
-          // 成功
           const raw = data.text;
-          const tts = extractTTS(raw);
-          const display = cleanDisplay(raw);
-          const newVocab = extractVocab(raw);
-          if (newVocab.length) setVocab(prev => {
-            const merged = [...prev];
-            newVocab.forEach(v => { if (!merged.includes(v)) merged.push(v); });
-            return merged;
-          });
-          setMessages(prev => [...prev, { role: "assistant", content: display, tts }]);
-          if (autoSpeak && tts) { setIsSpeaking(true); speakKorean(tts, () => setIsSpeaking(false)); }
-          return; // ← 成功したらループを抜ける
-
+          const ja = extractJA(raw);
+          const korean = extractKorean(raw);
+          setMessages(prev => [...prev, { role: "assistant", content: korean, ja, showJA: false }]);
+          if (autoSpeak && korean) { setIsSpeaking(true); speakKorean(korean, () => setIsSpeaking(false)); }
+          return;
         } catch (e) {
           lastError = e;
-          // 再試行不可エラー or 最終試行なら諦める
           if (e.retryable === false || attempt >= MAX_RETRIES) break;
-          // それ以外はループを続けて再試行
         }
       }
-
-      // 全試行失敗
       setMessages(prev => [...prev, { role: "assistant", content: `⚠️ ${lastError.message}` }]);
     } finally {
       setLoading(false);
@@ -172,15 +164,15 @@ export default function App() {
   };
 
   const quickReplies = [
-    { l: "네 (はい)", v: "네" },
-    { l: "아니요 (いいえ)", v: "아니요" },
-    { l: "모르겠어요 (わかりません)", v: "모르겠어요" },
-    { l: "다시 해주세요 (もう一度)", v: "다시 해주세요" },
+    { l: "네", v: "네" },
+    { l: "아니요", v: "아니요" },
+    { l: "모르겠어요", v: "모르겠어요" },
+    { l: "다시 해주세요", v: "다시 해주세요" },
   ];
 
   return (
     <div style={c.app}>
-      {/* Header */}
+      {/* ヘッダー */}
       <div style={c.header}>
         <div style={c.hLeft}>
           <span style={{ fontSize: 24 }}>🇰🇷</span>
@@ -191,18 +183,14 @@ export default function App() {
         </div>
         <div style={c.hRight}>
           {ttsOk && (
-            <button style={c.iconBtn} onClick={() => setAutoSpeak(v => !v)}>
+            <button style={c.iconBtn} onClick={() => setAutoSpeak(v => !v)} title={autoSpeak ? "自動読み上げON" : "自動読み上げOFF"}>
               {autoSpeak ? "🔊" : "🔇"}
             </button>
           )}
           <div style={c.badge}>5급</div>
-          {/* バージョンバッジ（クリックでチェンジログ表示） */}
           <button
             style={c.verBtn}
-            onClick={() => {
-              setShowChangelog(true);
-              localStorage.setItem("seen_version", CURRENT_VERSION);
-            }}
+            onClick={() => { setShowChangelog(true); localStorage.setItem("seen_version", CURRENT_VERSION); }}
             title="アップデート履歴を見る"
           >
             v{CURRENT_VERSION}
@@ -212,7 +200,7 @@ export default function App() {
       </div>
 
       <div style={c.body}>
-        {/* Chat */}
+        {/* チャット */}
         <div style={c.chatCol}>
           <div style={c.msgs}>
             {messages.map((m, i) => (
@@ -220,21 +208,54 @@ export default function App() {
                 {m.role === "assistant" && (
                   <div style={c.who}><span>🌸</span><span style={c.name}>소나 선생님</span></div>
                 )}
-                <div style={{ display: "flex", gap: 6, alignItems: "flex-end", flexDirection: m.role === "user" ? "row-reverse" : "row" }}>
-                  <div style={{ ...c.bubble, ...(m.role === "user" ? c.bubbleU : c.bubbleA) }}>
-                    {m.content.split("\n").map((ln, j, a) => (
-                      <span key={j}>{ln}{j < a.length - 1 && <br />}</span>
-                    ))}
+
+                {m.role === "user" ? (
+                  /* ユーザーメッセージ */
+                  <div style={{ ...c.bubble, ...c.bubbleU }}>
+                    {m.content.split("\n").map((ln, j, a) => <span key={j}>{ln}{j < a.length - 1 && <br />}</span>)}
                   </div>
-                  {m.role === "assistant" && m.tts && ttsOk && (
-                    <button style={c.speakBtn} onClick={() => {
-                      if (isSpeaking) { window.speechSynthesis.cancel(); setIsSpeaking(false); }
-                      else { setIsSpeaking(true); speakKorean(m.tts, () => setIsSpeaking(false)); }
-                    }}>🔊</button>
-                  )}
-                </div>
+                ) : (
+                  /* ソナ先生のメッセージ */
+                  <div>
+                    <div style={{ ...c.bubble, ...c.bubbleA }}>
+                      {/* 韓国語本文 */}
+                      {m.content.split("\n").map((ln, j, a) => <span key={j}>{ln}{j < a.length - 1 && <br />}</span>)}
+                      {/* 日本語訳（トグルで表示） */}
+                      {m.showJA && m.ja && (
+                        <div style={c.jaBlock}>
+                          {m.ja.split("\n").map((ln, j, a) => <span key={j}>{ln}{j < a.length - 1 && <br />}</span>)}
+                        </div>
+                      )}
+                    </div>
+                    {/* アクションボタン（システムメッセージは除く） */}
+                    {!m.isSystem && (
+                      <div style={c.msgActions}>
+                        {ttsOk && (
+                          <button
+                            style={c.actionBtn}
+                            title="韓国語を読み上げ"
+                            onClick={() => {
+                              if (isSpeaking) { window.speechSynthesis.cancel(); setIsSpeaking(false); }
+                              else { setIsSpeaking(true); speakKorean(m.content, () => setIsSpeaking(false)); }
+                            }}
+                          >🔊 읽기</button>
+                        )}
+                        {m.ja && (
+                          <button
+                            style={{ ...c.actionBtn, ...(m.showJA ? c.actionBtnOn : {}) }}
+                            onClick={() => toggleJA(i)}
+                          >
+                            {m.showJA ? "日訳を隠す" : "🇯🇵 日訳を見る"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
+
+            {/* ローディング / リトライ */}
             {loading && (
               <div style={c.row}>
                 <div style={c.who}><span>🌸</span></div>
@@ -244,9 +265,7 @@ export default function App() {
                   </div>
                 ) : (
                   <div style={{ ...c.bubble, ...c.bubbleA, padding: "14px 18px", display: "flex", gap: 5 }}>
-                    {[0, 0.2, 0.4].map((d, i) => (
-                      <span key={i} style={{ ...c.dot, animationDelay: `${d}s` }} />
-                    ))}
+                    {[0, 0.2, 0.4].map((d, k) => <span key={k} style={{ ...c.dot, animationDelay: `${d}s` }} />)}
                   </div>
                 )}
               </div>
@@ -254,6 +273,7 @@ export default function App() {
             <div ref={bottomRef} />
           </div>
 
+          {/* クイックリプライ */}
           {started && (
             <div style={c.quick}>
               {quickReplies.map(q => (
@@ -262,6 +282,7 @@ export default function App() {
             </div>
           )}
 
+          {/* 入力エリア */}
           <div style={c.inputArea}>
             {!started ? (
               <button style={c.startBtn} onClick={() => { setStarted(true); send("시작！（始める）"); }}>
@@ -269,7 +290,7 @@ export default function App() {
               </button>
             ) : (
               <>
-                {/* マイクボタン＋言語切り替え */}
+                {/* マイク＋言語切り替え */}
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0 }}>
                   <button
                     style={{ ...c.micBtn, background: micState === "listening" ? "#e85d6b" : "#f0d9d9", opacity: micState === "unsupported" ? 0.3 : 1 }}
@@ -281,15 +302,9 @@ export default function App() {
                   </button>
                   <button
                     style={micState === "unsupported" ? { display: "none" } : {
-                      border: "none",
-                      background: micLang === "ko-KR" ? "#e85d6b" : "#888",
-                      color: "#fff",
-                      borderRadius: 6,
-                      padding: "2px 5px",
-                      fontSize: 9,
-                      cursor: "pointer",
-                      fontWeight: 700,
-                      whiteSpace: "nowrap",
+                      border: "none", background: micLang === "ko-KR" ? "#e85d6b" : "#888",
+                      color: "#fff", borderRadius: 6, padding: "2px 5px", fontSize: 9,
+                      cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap",
                     }}
                     onClick={() => setMicLang(l => l === "ko-KR" ? "ja-JP" : "ko-KR")}
                     title="音声入力言語を切り替え"
@@ -322,12 +337,43 @@ export default function App() {
           )}
         </div>
 
-        {/* Vocab sidebar */}
+        {/* 単語メモ（サイドバー） */}
         <div style={c.side}>
           <div style={c.sideTitle}>📝 単語メモ</div>
+          {/* 追加フォーム */}
+          <div style={c.vocabForm}>
+            <input
+              style={c.vocabInput}
+              placeholder="단어 (韓国語)"
+              value={newWord}
+              onChange={e => setNewWord(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && addVocab()}
+            />
+            <input
+              style={c.vocabInput}
+              placeholder="意味 (日本語)"
+              value={newMeaning}
+              onChange={e => setNewMeaning(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && addVocab()}
+            />
+            <button
+              style={{ ...c.vocabAddBtn, opacity: !newWord.trim() ? 0.4 : 1 }}
+              onClick={addVocab}
+              disabled={!newWord.trim()}
+            >＋ 追加</button>
+          </div>
+          {/* 単語一覧 */}
           {vocab.length === 0
-            ? <div style={c.sideEmpty}>会話中に出てきた単語がここに貯まります</div>
-            : vocab.map((v, i) => <div key={i} style={c.vocabItem}>{v}</div>)
+            ? <div style={c.sideEmpty}>覚えたい単語を自由に追加しましょう</div>
+            : vocab.map((v, i) => (
+                <div key={i} style={c.vocabItem}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 12, color: "#333" }}>{v.word}</div>
+                    {v.meaning && <div style={{ fontSize: 10, color: "#999", marginTop: 1 }}>{v.meaning}</div>}
+                  </div>
+                  <button style={c.vocabDelBtn} onClick={() => deleteVocab(i)} title="削除">×</button>
+                </div>
+              ))
           }
         </div>
       </div>
@@ -344,16 +390,12 @@ export default function App() {
               {CHANGELOG.map((entry, i) => (
                 <div key={entry.version} style={{ ...c.clEntry, ...(i === 0 ? c.clEntryLatest : {}) }}>
                   <div style={c.clVerRow}>
-                    <span style={{ ...c.clVer, ...(i === 0 ? c.clVerLatest : {}) }}>
-                      v{entry.version}
-                    </span>
+                    <span style={{ ...c.clVer, ...(i === 0 ? c.clVerLatest : {}) }}>v{entry.version}</span>
                     {i === 0 && <span style={c.clLatestTag}>最新</span>}
                     <span style={c.clDate}>{entry.date}</span>
                   </div>
                   <ul style={c.clList}>
-                    {entry.changes.map((ch, j) => (
-                      <li key={j} style={c.clItem}>• {ch}</li>
-                    ))}
+                    {entry.changes.map((ch, j) => <li key={j} style={c.clItem}>• {ch}</li>)}
                   </ul>
                 </div>
               ))}
@@ -392,7 +434,10 @@ const c = {
   bubble: { padding: "9px 12px", fontSize: 14, lineHeight: 1.75, borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,.06)", whiteSpace: "pre-wrap", wordBreak: "break-word" },
   bubbleA: { background: "#fff", border: "1px solid #f0d9d9", color: "#333" },
   bubbleU: { background: "#e85d6b", color: "#fff" },
-  speakBtn: { background: "none", border: "none", fontSize: 14, cursor: "pointer", opacity: 0.55, padding: 2, flexShrink: 0 },
+  jaBlock: { marginTop: 10, paddingTop: 10, borderTop: "1px dashed #f0d9d9", color: "#888", fontSize: 13, lineHeight: 1.7 },
+  msgActions: { display: "flex", gap: 5, marginTop: 4 },
+  actionBtn: { background: "#fff", border: "1px solid #eee", borderRadius: 14, padding: "3px 10px", fontSize: 11, cursor: "pointer", color: "#bbb", fontFamily: "inherit" },
+  actionBtnOn: { background: "#fff0f2", border: "1px solid #e85d6b", color: "#e85d6b" },
   dot: { width: 7, height: 7, borderRadius: "50%", background: "#e85d6b", display: "inline-block", animation: "bounce 1.2s infinite" },
   quick: { padding: "6px 12px", display: "flex", gap: 6, flexWrap: "wrap", borderTop: "1px solid #f0d9d9", background: "#fff8f6", flexShrink: 0 },
   qBtn: { background: "#fff", border: "1px solid #e85d6b", color: "#e85d6b", borderRadius: 18, padding: "4px 11px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" },
@@ -402,10 +447,15 @@ const c = {
   sendBtn: { background: "#e85d6b", color: "#fff", border: "none", borderRadius: 9, padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" },
   startBtn: { flex: 1, background: "#e85d6b", color: "#fff", border: "none", borderRadius: 11, padding: "12px", fontSize: 15, fontWeight: 700, cursor: "pointer" },
   listenBar: { background: "#fce8ea", color: "#c0392b", fontSize: 11, padding: "5px 14px", textAlign: "center", flexShrink: 0 },
-  side: { width: 165, borderLeft: "1px solid #f0d9d9", background: "#fffaf8", padding: 11, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 },
+  // 単語メモ（サイドバー）
+  side: { width: 175, borderLeft: "1px solid #f0d9d9", background: "#fffaf8", padding: 10, overflowY: "auto", display: "flex", flexDirection: "column", gap: 7, flexShrink: 0 },
   sideTitle: { fontSize: 12, fontWeight: 700, color: "#e85d6b", borderBottom: "1px solid #f0d9d9", paddingBottom: 6, marginBottom: 2 },
-  sideEmpty: { fontSize: 11, color: "#ccc", lineHeight: 1.6, textAlign: "center", marginTop: 14 },
-  vocabItem: { background: "#fff", border: "1px solid #f0d9d9", borderRadius: 7, padding: "4px 8px", fontSize: 11, lineHeight: 1.5, color: "#555" },
+  sideEmpty: { fontSize: 11, color: "#ccc", lineHeight: 1.6, textAlign: "center", marginTop: 8 },
+  vocabForm: { display: "flex", flexDirection: "column", gap: 5 },
+  vocabInput: { border: "1px solid #f0d9d9", borderRadius: 7, padding: "5px 7px", fontSize: 11, fontFamily: "inherit", outline: "none", background: "#fff", width: "100%" },
+  vocabAddBtn: { background: "#e85d6b", color: "#fff", border: "none", borderRadius: 7, padding: "5px 0", fontSize: 11, fontWeight: 700, cursor: "pointer" },
+  vocabItem: { background: "#fff", border: "1px solid #f0d9d9", borderRadius: 8, padding: "5px 7px", display: "flex", alignItems: "flex-start", gap: 4 },
+  vocabDelBtn: { background: "none", border: "none", color: "#ddd", cursor: "pointer", fontSize: 14, padding: "0 1px", flexShrink: 0, lineHeight: 1 },
   // チェンジログモーダル
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
   modal: { background: "#fff", borderRadius: 16, width: "min(92vw, 420px)", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px rgba(0,0,0,.2)", overflow: "hidden" },

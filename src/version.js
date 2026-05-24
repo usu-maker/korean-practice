@@ -1,6 +1,16 @@
-export const CURRENT_VERSION = "1.3.0";
+export const CURRENT_VERSION = "1.4.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.4.0",
+    date: "2026/05/24",
+    changes: [
+      "出力を韓国語のみに変更（カタカナ読み廃止）",
+      "「🇯🇵 日訳を見る」ボタンで日本語訳をトグル表示",
+      "🔊ボタンで韓国語テキスト全文を読み上げ",
+      "単語メモを手動記録式に変更（ページを閉じても保存）",
+    ],
+  },
   {
     version: "1.3.0",
     date: "2026/05/24",
