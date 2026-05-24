@@ -40,6 +40,10 @@ function speakKorean(text, onEnd) {
   window.speechSynthesis.speak(u);
 }
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const MAX_RETRIES = 3;
+const RETRY_WAIT_SEC = 3;
+
 export default function App() {
   const [messages, setMessages] = useState([{
     role: "assistant",
@@ -54,6 +58,7 @@ export default function App() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [micState, setMicState] = useState("idle"); // idle | listening | unsupported
   const [micLang, setMicLang] = useState("ko-KR"); // ko-KR | ja-JP
+  const [retryInfo, setRetryInfo] = useState(null); // null | { countdown, attempt, max }
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const recRef = useRef(null);
@@ -91,34 +96,65 @@ export default function App() {
     setInput("");
     setLoading(true);
 
+    let lastError = null;
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system: SYSTEM_PROMPT,
-          messages: history.map(m => ({ role: m.role, content: m.content })),
-        }),
-      });
-      let data;
-      try { data = await res.json(); } catch { throw new Error(`サーバーからの応答が読み取れませんでした (HTTP ${res.status})`); }
-      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : `エラーが発生しました (HTTP ${res.status})`);
-      if (!data.text) throw new Error("AIからの返答が空でした。もう一度話しかけてみてください");
-      const raw = data.text;
-      const tts = extractTTS(raw);
-      const display = cleanDisplay(raw);
-      const newVocab = extractVocab(raw);
-      if (newVocab.length) setVocab(prev => {
-        const merged = [...prev];
-        newVocab.forEach(v => { if (!merged.includes(v)) merged.push(v); });
-        return merged;
-      });
-      setMessages(prev => [...prev, { role: "assistant", content: display, tts }]);
-      if (autoSpeak && tts) { setIsSpeaking(true); speakKorean(tts, () => setIsSpeaking(false)); }
-    } catch (e) {
-      setMessages(prev => [...prev, { role: "assistant", content: `⚠️ ${e.message}` }]);
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        // 2回目以降はカウントダウン表示してから再試行
+        if (attempt > 0) {
+          for (let i = RETRY_WAIT_SEC; i > 0; i--) {
+            setRetryInfo({ countdown: i, attempt, max: MAX_RETRIES });
+            await sleep(1000);
+          }
+          setRetryInfo(null);
+        }
+
+        try {
+          const res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              system: SYSTEM_PROMPT,
+              messages: history.map(m => ({ role: m.role, content: m.content })),
+            }),
+          });
+          let data;
+          try { data = await res.json(); } catch { throw Object.assign(new Error(`サーバーからの応答が読み取れませんでした (HTTP ${res.status})`), { retryable: true }); }
+
+          if (!res.ok) {
+            const errMsg = typeof data.error === "string" ? data.error : `エラーが発生しました (HTTP ${res.status})`;
+            // 400/401/403 は再試行しても無意味
+            const retryable = res.status !== 400 && res.status !== 401 && res.status !== 403;
+            throw Object.assign(new Error(errMsg), { retryable });
+          }
+          if (!data.text) throw Object.assign(new Error("AIからの返答が空でした。もう一度話しかけてみてください"), { retryable: true });
+
+          // 成功
+          const raw = data.text;
+          const tts = extractTTS(raw);
+          const display = cleanDisplay(raw);
+          const newVocab = extractVocab(raw);
+          if (newVocab.length) setVocab(prev => {
+            const merged = [...prev];
+            newVocab.forEach(v => { if (!merged.includes(v)) merged.push(v); });
+            return merged;
+          });
+          setMessages(prev => [...prev, { role: "assistant", content: display, tts }]);
+          if (autoSpeak && tts) { setIsSpeaking(true); speakKorean(tts, () => setIsSpeaking(false)); }
+          return; // ← 成功したらループを抜ける
+
+        } catch (e) {
+          lastError = e;
+          // 再試行不可エラー or 最終試行なら諦める
+          if (e.retryable === false || attempt >= MAX_RETRIES) break;
+          // それ以外はループを続けて再試行
+        }
+      }
+
+      // 全試行失敗
+      setMessages(prev => [...prev, { role: "assistant", content: `⚠️ ${lastError.message}` }]);
     } finally {
       setLoading(false);
+      setRetryInfo(null);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [messages, loading, autoSpeak]);
@@ -184,11 +220,17 @@ export default function App() {
             {loading && (
               <div style={c.row}>
                 <div style={c.who}><span>🌸</span></div>
-                <div style={{ ...c.bubble, ...c.bubbleA, padding: "14px 18px", display: "flex", gap: 5 }}>
-                  {[0, 0.2, 0.4].map((d, i) => (
-                    <span key={i} style={{ ...c.dot, animationDelay: `${d}s` }} />
-                  ))}
-                </div>
+                {retryInfo ? (
+                  <div style={{ ...c.bubble, ...c.bubbleA, padding: "11px 14px", color: "#e85d6b", fontSize: 13 }}>
+                    ⏳ {retryInfo.countdown}秒後に再試行します… ({retryInfo.attempt}/{retryInfo.max}回目)
+                  </div>
+                ) : (
+                  <div style={{ ...c.bubble, ...c.bubbleA, padding: "14px 18px", display: "flex", gap: 5 }}>
+                    {[0, 0.2, 0.4].map((d, i) => (
+                      <span key={i} style={{ ...c.dot, animationDelay: `${d}s` }} />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             <div ref={bottomRef} />
