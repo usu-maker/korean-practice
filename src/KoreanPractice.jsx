@@ -63,100 +63,12 @@ const MAX_RETRIES = 3;
 const RETRY_WAIT_SEC = 3;
 
 /* ════════════════════════════════════════
-   ソナ先生 SVGアバター
-   - 待機中  : まばたき (.eyelid-l / .eyelid-r)
-   - 読み上げ中: 口パク   (.mouth-anim)
+   ソナ先生アバター（実写画像 + CSSオーバーレイ）
+   - .sona-idle    : 待機中（ゆっくり呼吸スケール）
+   - .sona-speaking: 読み上げ中（縦ゆれ＋ピンクグロー）
+   - .sona-blink   : まばたきオーバーレイ（常時）
+   - .sona-mouth   : 口パクオーバーレイ（isSpeaking 時）
 ════════════════════════════════════════ */
-function SonaAvatar({ speaking }) {
-  return (
-    <svg
-      viewBox="0 0 100 115"
-      style={{ width: 72, height: 83, display: "block", flexShrink: 0 }}
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      {/* ── 髪（後ろ） ── */}
-      <ellipse cx="50" cy="49" rx="42" ry="46" fill="#1c0d08"/>
-
-      {/* ── 服＆衿 ── */}
-      <path d="M14 103 Q50 89 86 103 L94 115 L6 115 Z" fill="#e85d6b"/>
-      <path d="M38 100 L50 110 L62 100" stroke="white" strokeWidth="3"
-            fill="none" strokeLinecap="round"/>
-
-      {/* ── 顔 ── */}
-      <ellipse cx="50" cy="54" rx="32" ry="34" fill="#FDDDB5"/>
-
-      {/* ── 前髪 ── */}
-      <path d="M18 39 Q17 13 50 10 Q83 13 82 39
-               Q69 27 50 26 Q31 27 18 39Z"
-            fill="#1c0d08"/>
-
-      {/* ── サイドの髪 ── */}
-      <path d="M18 39 Q12 60 16 80 Q21 71 23 62 Q18 52 18 39Z" fill="#1c0d08"/>
-      <path d="M82 39 Q88 60 84 80 Q79 71 77 62 Q82 52 82 39Z" fill="#1c0d08"/>
-
-      {/* ── ヘアリボン ── */}
-      <ellipse cx="69" cy="21" rx="8.5" ry="5.5"
-               fill="#e85d6b" transform="rotate(-22,69,21)"/>
-      <ellipse cx="83" cy="21" rx="8.5" ry="5.5"
-               fill="#e85d6b" transform="rotate(22,83,21)"/>
-      <circle  cx="76" cy="21" r="4.5" fill="#ff7d8e"/>
-
-      {/* ── 眉毛 ── */}
-      <path d="M28 44 Q34 40 40 42" stroke="#2d1205" strokeWidth="2.5"
-            fill="none" strokeLinecap="round"/>
-      <path d="M60 42 Q66 40 72 44" stroke="#2d1205" strokeWidth="2.5"
-            fill="none" strokeLinecap="round"/>
-
-      {/* ── 左目 ── */}
-      {/* 白目 */}
-      <ellipse cx="35" cy="54" rx="8"   ry="7.5" fill="white"/>
-      {/* 虹彩 */}
-      <ellipse cx="35" cy="55" rx="5.5" ry="6"   fill="#5c3317"/>
-      {/* 瞳孔 */}
-      <circle  cx="35" cy="55" r="3.5"            fill="#0a0408"/>
-      {/* ハイライト */}
-      <circle  cx="37.5" cy="52.5" r="1.8"        fill="white" opacity="0.9"/>
-      {/* まつ毛 */}
-      <path d="M27.5 49.5 Q31.5 44.5 35 46.5 Q38.5 44.5 42.5 49.5"
-            stroke="#1c0d08" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
-      {/* まぶた（まばたき用） */}
-      <ellipse cx="35" cy="54" rx="8" ry="7.5"
-               fill="#FDDDB5" className="eyelid-l"/>
-
-      {/* ── 右目 ── */}
-      <ellipse cx="65" cy="54" rx="8"   ry="7.5" fill="white"/>
-      <ellipse cx="65" cy="55" rx="5.5" ry="6"   fill="#5c3317"/>
-      <circle  cx="65" cy="55" r="3.5"            fill="#0a0408"/>
-      <circle  cx="67.5" cy="52.5" r="1.8"        fill="white" opacity="0.9"/>
-      <path d="M57.5 49.5 Q61.5 44.5 65 46.5 Q68.5 44.5 72.5 49.5"
-            stroke="#1c0d08" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
-      <ellipse cx="65" cy="54" rx="8" ry="7.5"
-               fill="#FDDDB5" className="eyelid-r"/>
-
-      {/* ── 鼻 ── */}
-      <path d="M47 67 Q50 71 53 67" stroke="#e09060" strokeWidth="1.5"
-            fill="none" strokeLinecap="round"/>
-
-      {/* ── ほっぺ ── */}
-      <ellipse cx="21" cy="66" rx="9" ry="5.5" fill="#ffb0b8" opacity="0.38"/>
-      <ellipse cx="79" cy="66" rx="9" ry="5.5" fill="#ffb0b8" opacity="0.38"/>
-
-      {/* ── 口 ── */}
-      {speaking ? (
-        /* 口パク：グループごとスケール */
-        <g className="mouth-anim">
-          <ellipse cx="50" cy="79" rx="9" ry="6"   fill="#c84060"/>
-          <path d="M41 76 Q50 73 59 76"              fill="#f5dde0"/>
-        </g>
-      ) : (
-        /* 微笑み */
-        <path d="M41 77 Q50 85 59 77"
-              stroke="#d06060" strokeWidth="2.5"
-              fill="none" strokeLinecap="round"/>
-      )}
-    </svg>
-  );
-}
 
 /* ════════════════════════════════════════
    メインコンポーネント
@@ -343,16 +255,30 @@ export default function App() {
         {/* ══ チャット列 ══ */}
         <div style={c.chatCol}>
 
-          {/* ── アバターパネル ── */}
+          {/* ── アバターパネル（上部中央） ── */}
           <div style={c.avatarPanel}>
-            <SonaAvatar speaking={isSpeaking}/>
-            <div style={c.avatarInfo}>
-              <div style={c.avatarName}>소나 선생님</div>
-              <div style={c.avatarStatus}>
-                {isSpeaking ? "🗣 話し中…"
-                 : loading  ? "💭 考え中…"
-                 :             "✨ 待機中"}
-              </div>
+            {/* 円形アバター＋アニメーションオーバーレイ */}
+            <div
+              style={c.avatarWrap}
+              className={isSpeaking ? "sona-speaking" : "sona-idle"}
+            >
+              <img
+                src="/sona.png"
+                alt="소나 선생님"
+                style={c.avatarImg}
+                draggable={false}
+              />
+              {/* まばたきオーバーレイ（常時アニメ） */}
+              <div className="sona-blink" />
+              {/* 口パクオーバーレイ（読み上げ中のみ） */}
+              {isSpeaking && <div className="sona-mouth" />}
+            </div>
+
+            <div style={c.avatarName}>소나 선생님</div>
+            <div style={c.avatarStatus}>
+              {isSpeaking ? "🗣 話し中…"
+               : loading  ? "💭 考え中…"
+               :             "✨ 待機中"}
             </div>
           </div>
 
@@ -557,33 +483,81 @@ export default function App() {
           40%          { transform: translateY(-6px); }
         }
 
-        /* ── まばたき ──
-           eyelid は顔色の楕円。scaleY(0) = 透明（目が開いている）
-           scaleY(1) = 完全に表示（目が閉じている）            */
-        @keyframes blink {
-          0%, 90%      { transform: scaleY(0); }
-          92%, 96%     { transform: scaleY(1); }
-          99%, 100%    { transform: scaleY(0); }
+        /* ════════════════════════════════
+           アバター: 待機中（ゆっくり呼吸）
+        ════════════════════════════════ */
+        @keyframes sona-breathe {
+          0%, 100% { transform: scale(1);     }
+          50%      { transform: scale(1.025); }
         }
-        .eyelid-l {
-          transform-origin: 35px 46.5px;
-          animation: blink 3.8s linear infinite;
-        }
-        .eyelid-r {
-          transform-origin: 65px 46.5px;
-          animation: blink 3.8s linear infinite;
-          animation-delay: 0.04s;
+        .sona-idle {
+          animation: sona-breathe 5s ease-in-out infinite;
         }
 
-        /* ── 口パク ──
-           transform-origin を口の上端に置き scaleY で開閉  */
-        @keyframes mouth-speak {
-          0%, 100% { transform: scaleY(0.1); }
-          50%      { transform: scaleY(1);   }
+        /* ════════════════════════════════
+           アバター: 読み上げ中（縦ゆれ＋ピンクグロー）
+        ════════════════════════════════ */
+        @keyframes sona-speak {
+          0%,100% { transform: translateY(0)   scale(1);     }
+          25%     { transform: translateY(-3px) scale(1.02); }
+          75%     { transform: translateY(2px)  scale(0.99); }
         }
-        .mouth-anim {
-          transform-origin: 50px 73px;
-          animation: mouth-speak 0.28s ease-in-out infinite;
+        @keyframes sona-glow {
+          0%,100% { box-shadow: 0 0  8px 2px rgba(232,93,107,.45); }
+          50%     { box-shadow: 0 0 20px 6px rgba(232,93,107,.80); }
+        }
+        .sona-speaking {
+          animation:
+            sona-speak 0.45s ease-in-out infinite,
+            sona-glow  0.45s ease-in-out infinite;
+        }
+
+        /* ════════════════════════════════
+           まばたきオーバーレイ
+           - scaleY(0) = まぶた非表示（目が開いている）
+           - scaleY(1) = まぶた表示  （目が閉じている）
+           ★ top / height は画像の目の位置に合わせて調整
+        ════════════════════════════════ */
+        .sona-blink {
+          position: absolute;
+          left: 10%;
+          width: 80%;
+          top: 34%;      /* ← 目の上端（画像に合わせて調整） */
+          height: 13%;   /* ← 目の高さ（画像に合わせて調整） */
+          background: rgba(18, 6, 3, 0.88);
+          border-radius: 0 0 60% 60% / 0 0 100% 100%;
+          transform: scaleY(0);
+          transform-origin: top center;
+          pointer-events: none;
+          animation: sona-blink-anim 4.2s linear infinite;
+        }
+        @keyframes sona-blink-anim {
+          0%, 88%  { transform: scaleY(0); }
+          91%      { transform: scaleY(1); }
+          95%      { transform: scaleY(1); }
+          98%      { transform: scaleY(0); }
+          100%     { transform: scaleY(0); }
+        }
+
+        /* ════════════════════════════════
+           口パクオーバーレイ（isSpeaking 時のみ表示）
+           ★ top / height は画像の口の位置に合わせて調整
+        ════════════════════════════════ */
+        .sona-mouth {
+          position: absolute;
+          left: 28%;
+          width: 44%;
+          top: 64%;      /* ← 口の上端（画像に合わせて調整） */
+          height: 10%;   /* ← 口の高さ（画像に合わせて調整） */
+          background: rgba(140, 35, 55, 0.45);
+          border-radius: 0 0 50% 50% / 0 0 100% 100%;
+          transform-origin: top center;
+          pointer-events: none;
+          animation: sona-mouth-anim 0.30s ease-in-out infinite;
+        }
+        @keyframes sona-mouth-anim {
+          0%,100% { transform: scaleY(0.08); opacity: 0.5; }
+          50%     { transform: scaleY(1);    opacity: 0.9; }
         }
       `}</style>
     </div>
@@ -616,12 +590,21 @@ const c = {
   /* Layout */
   body:       { display: "flex", flex: 1, overflow: "hidden" },
   chatCol:    { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
-  /* Avatar panel */
-  avatarPanel:{ display: "flex", alignItems: "center", gap: 14, padding: "8px 16px 6px",
-                background: "linear-gradient(to right,#fff0f2,#fff8f6)",
+  /* Avatar panel（上部中央） */
+  avatarPanel:{ display: "flex", flexDirection: "column", alignItems: "center",
+                gap: 5, padding: "12px 16px 8px",
+                background: "linear-gradient(to bottom,#fff0f2,#fff8f6)",
                 borderBottom: "1px solid #f0d9d9", flexShrink: 0 },
-  avatarInfo: { display: "flex", flexDirection: "column", gap: 3 },
-  avatarName: { fontSize: 14, fontWeight: 700, color: "#333" },
+  /* 円形ラッパー（overflow:hidden で画像＋オーバーレイを円にクリップ） */
+  avatarWrap: { position: "relative", width: 100, height: 100,
+                borderRadius: "50%", overflow: "hidden",
+                border: "3px solid #e85d6b",
+                boxShadow: "0 3px 14px rgba(232,93,107,.30)",
+                flexShrink: 0 },
+  avatarImg:  { width: "100%", height: "100%", objectFit: "cover",
+                objectPosition: "center top", display: "block",
+                userSelect: "none", WebkitUserDrag: "none" },
+  avatarName: { fontSize: 13, fontWeight: 700, color: "#333" },
   avatarStatus:{ fontSize: 11, color: "#b08080" },
   /* Messages */
   msgs:       { flex: 1, overflowY: "auto", padding: "12px",
