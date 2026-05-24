@@ -1,6 +1,16 @@
-export const CURRENT_VERSION = "1.4.0";
+export const CURRENT_VERSION = "1.5.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.5.0",
+    date: "2026/05/24",
+    changes: [
+      "ソナ先生のアバター（SVGイラスト）を追加",
+      "待機中：まばたきアニメーション",
+      "読み上げ中：口が動くアニメーション",
+      "音声を若い女性向けに最適化（ピッチ調整・音声選択）",
+    ],
+  },
   {
     version: "1.4.0",
     date: "2026/05/24",

@@ -23,6 +23,7 @@ const SYSTEM_PROMPT = `あなたは韓国語会話練習の先生「ソナ先生
 ## 5級レベルの目安
 - 基本あいさつ、自己紹介、数字、曜日、時間、基礎単語300語程度`;
 
+/* ─── テキスト処理 ─── */
 function extractJA(t) {
   const m = t.match(/\[JA\]([\s\S]*?)\[\/JA\]/);
   return m ? m[1].trim() : null;
@@ -30,11 +31,29 @@ function extractJA(t) {
 function extractKorean(t) {
   return t.replace(/\[JA\][\s\S]*?\[\/JA\]\n?/g, "").trim();
 }
+
+/* ─── 音声 ─── */
+function getKoreanVoice() {
+  try {
+    const voices = window.speechSynthesis.getVoices();
+    // 若い女性の韓国語音声を優先
+    const prefer = ["Yuna", "Heami", "유나", "Soyeon", "Google 한국의"];
+    for (const n of prefer) {
+      const v = voices.find(v => v.lang.startsWith("ko") && v.name.includes(n));
+      if (v) return v;
+    }
+    return voices.find(v => v.lang.startsWith("ko")) || null;
+  } catch { return null; }
+}
 function speakKorean(text, onEnd) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = "ko-KR"; u.rate = 0.85;
+  u.lang  = "ko-KR";
+  u.rate  = 0.85;
+  u.pitch = 1.2;   // 若い女性らしい高めのピッチ
+  const voice = getKoreanVoice();
+  if (voice) u.voice = voice;
   if (onEnd) u.onend = onEnd;
   window.speechSynthesis.speak(u);
 }
@@ -43,6 +62,105 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MAX_RETRIES = 3;
 const RETRY_WAIT_SEC = 3;
 
+/* ════════════════════════════════════════
+   ソナ先生 SVGアバター
+   - 待機中  : まばたき (.eyelid-l / .eyelid-r)
+   - 読み上げ中: 口パク   (.mouth-anim)
+════════════════════════════════════════ */
+function SonaAvatar({ speaking }) {
+  return (
+    <svg
+      viewBox="0 0 100 115"
+      style={{ width: 72, height: 83, display: "block", flexShrink: 0 }}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {/* ── 髪（後ろ） ── */}
+      <ellipse cx="50" cy="49" rx="42" ry="46" fill="#1c0d08"/>
+
+      {/* ── 服＆衿 ── */}
+      <path d="M14 103 Q50 89 86 103 L94 115 L6 115 Z" fill="#e85d6b"/>
+      <path d="M38 100 L50 110 L62 100" stroke="white" strokeWidth="3"
+            fill="none" strokeLinecap="round"/>
+
+      {/* ── 顔 ── */}
+      <ellipse cx="50" cy="54" rx="32" ry="34" fill="#FDDDB5"/>
+
+      {/* ── 前髪 ── */}
+      <path d="M18 39 Q17 13 50 10 Q83 13 82 39
+               Q69 27 50 26 Q31 27 18 39Z"
+            fill="#1c0d08"/>
+
+      {/* ── サイドの髪 ── */}
+      <path d="M18 39 Q12 60 16 80 Q21 71 23 62 Q18 52 18 39Z" fill="#1c0d08"/>
+      <path d="M82 39 Q88 60 84 80 Q79 71 77 62 Q82 52 82 39Z" fill="#1c0d08"/>
+
+      {/* ── ヘアリボン ── */}
+      <ellipse cx="69" cy="21" rx="8.5" ry="5.5"
+               fill="#e85d6b" transform="rotate(-22,69,21)"/>
+      <ellipse cx="83" cy="21" rx="8.5" ry="5.5"
+               fill="#e85d6b" transform="rotate(22,83,21)"/>
+      <circle  cx="76" cy="21" r="4.5" fill="#ff7d8e"/>
+
+      {/* ── 眉毛 ── */}
+      <path d="M28 44 Q34 40 40 42" stroke="#2d1205" strokeWidth="2.5"
+            fill="none" strokeLinecap="round"/>
+      <path d="M60 42 Q66 40 72 44" stroke="#2d1205" strokeWidth="2.5"
+            fill="none" strokeLinecap="round"/>
+
+      {/* ── 左目 ── */}
+      {/* 白目 */}
+      <ellipse cx="35" cy="54" rx="8"   ry="7.5" fill="white"/>
+      {/* 虹彩 */}
+      <ellipse cx="35" cy="55" rx="5.5" ry="6"   fill="#5c3317"/>
+      {/* 瞳孔 */}
+      <circle  cx="35" cy="55" r="3.5"            fill="#0a0408"/>
+      {/* ハイライト */}
+      <circle  cx="37.5" cy="52.5" r="1.8"        fill="white" opacity="0.9"/>
+      {/* まつ毛 */}
+      <path d="M27.5 49.5 Q31.5 44.5 35 46.5 Q38.5 44.5 42.5 49.5"
+            stroke="#1c0d08" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
+      {/* まぶた（まばたき用） */}
+      <ellipse cx="35" cy="54" rx="8" ry="7.5"
+               fill="#FDDDB5" className="eyelid-l"/>
+
+      {/* ── 右目 ── */}
+      <ellipse cx="65" cy="54" rx="8"   ry="7.5" fill="white"/>
+      <ellipse cx="65" cy="55" rx="5.5" ry="6"   fill="#5c3317"/>
+      <circle  cx="65" cy="55" r="3.5"            fill="#0a0408"/>
+      <circle  cx="67.5" cy="52.5" r="1.8"        fill="white" opacity="0.9"/>
+      <path d="M57.5 49.5 Q61.5 44.5 65 46.5 Q68.5 44.5 72.5 49.5"
+            stroke="#1c0d08" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
+      <ellipse cx="65" cy="54" rx="8" ry="7.5"
+               fill="#FDDDB5" className="eyelid-r"/>
+
+      {/* ── 鼻 ── */}
+      <path d="M47 67 Q50 71 53 67" stroke="#e09060" strokeWidth="1.5"
+            fill="none" strokeLinecap="round"/>
+
+      {/* ── ほっぺ ── */}
+      <ellipse cx="21" cy="66" rx="9" ry="5.5" fill="#ffb0b8" opacity="0.38"/>
+      <ellipse cx="79" cy="66" rx="9" ry="5.5" fill="#ffb0b8" opacity="0.38"/>
+
+      {/* ── 口 ── */}
+      {speaking ? (
+        /* 口パク：グループごとスケール */
+        <g className="mouth-anim">
+          <ellipse cx="50" cy="79" rx="9" ry="6"   fill="#c84060"/>
+          <path d="M41 76 Q50 73 59 76"              fill="#f5dde0"/>
+        </g>
+      ) : (
+        /* 微笑み */
+        <path d="M41 77 Q50 85 59 77"
+              stroke="#d06060" strokeWidth="2.5"
+              fill="none" strokeLinecap="round"/>
+      )}
+    </svg>
+  );
+}
+
+/* ════════════════════════════════════════
+   メインコンポーネント
+════════════════════════════════════════ */
 export default function App() {
   const [messages, setMessages] = useState([{
     role: "assistant",
@@ -51,51 +169,58 @@ export default function App() {
     showJA: true,
     isSystem: true,
   }]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [started, setStarted] = useState(false);
-  const [autoSpeak, setAutoSpeak] = useState(true);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [micState, setMicState] = useState("idle"); // idle | listening | unsupported
-  const [micLang, setMicLang] = useState("ko-KR"); // ko-KR | ja-JP
-  const [retryInfo, setRetryInfo] = useState(null); // null | { countdown, attempt, max }
-  const [showChangelog, setShowChangelog] = useState(false);
-  const [isNewVersion] = useState(() => localStorage.getItem("seen_version") !== CURRENT_VERSION);
+  const [input,        setInput]        = useState("");
+  const [loading,      setLoading]      = useState(false);
+  const [started,      setStarted]      = useState(false);
+  const [autoSpeak,    setAutoSpeak]    = useState(true);
+  const [isSpeaking,   setIsSpeaking]   = useState(false);
+  const [micState,     setMicState]     = useState("idle");
+  const [micLang,      setMicLang]      = useState("ko-KR");
+  const [retryInfo,    setRetryInfo]    = useState(null);
+  const [showChangelog,setShowChangelog]= useState(false);
+  const [isNewVersion] = useState(() =>
+    localStorage.getItem("seen_version") !== CURRENT_VERSION
+  );
 
-  // 単語メモ（localStorage 永続化）
-  const [vocab, setVocab] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("korean_vocab") || "[]"); } catch { return []; }
+  /* 単語メモ（localStorage 永続） */
+  const [vocab,      setVocab]      = useState(() => {
+    try { return JSON.parse(localStorage.getItem("korean_vocab") || "[]"); }
+    catch { return []; }
   });
-  const [newWord, setNewWord] = useState("");
+  const [newWord,    setNewWord]    = useState("");
   const [newMeaning, setNewMeaning] = useState("");
 
   const bottomRef = useRef(null);
-  const inputRef = useRef(null);
-  const recRef = useRef(null);
-  const ttsOk = !!window.speechSynthesis;
+  const inputRef  = useRef(null);
+  const recRef    = useRef(null);
+  const ttsOk     = !!window.speechSynthesis;
 
-  // Speech Recognition 初期化
+  /* 音声認識 初期化 */
   useEffect(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { setMicState("unsupported"); return; }
     const r = new SR();
     r.lang = "ko-KR"; r.continuous = false; r.interimResults = false;
     r.onresult = e => { setInput(e.results[0][0].transcript); setMicState("idle"); };
-    r.onerror = () => setMicState("idle");
-    r.onend = () => setMicState("idle");
+    r.onerror  = () => setMicState("idle");
+    r.onend    = () => setMicState("idle");
     recRef.current = r;
+    // 音声リスト先読み
+    window.speechSynthesis?.getVoices();
+    if (window.speechSynthesis)
+      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
   }, []);
 
   useEffect(() => { if (recRef.current) recRef.current.lang = micLang; }, [micLang]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
   useEffect(() => { localStorage.setItem("korean_vocab", JSON.stringify(vocab)); }, [vocab]);
 
-  // 日本語訳トグル
+  /* 日本語訳トグル */
   const toggleJA = useCallback((idx) => {
     setMessages(prev => prev.map((m, i) => i === idx ? { ...m, showJA: !m.showJA } : m));
   }, []);
 
-  // 単語メモ操作
+  /* 単語メモ操作 */
   const addVocab = () => {
     if (!newWord.trim()) return;
     setVocab(prev => [...prev, { word: newWord.trim(), meaning: newMeaning.trim() }]);
@@ -103,6 +228,7 @@ export default function App() {
   };
   const deleteVocab = (i) => setVocab(prev => prev.filter((_, idx) => idx !== i));
 
+  /* 送信 & リトライ */
   const send = useCallback(async (text) => {
     if (!text.trim() || loading) return;
     const userMsg = { role: "user", content: text };
@@ -131,18 +257,30 @@ export default function App() {
             }),
           });
           let data;
-          try { data = await res.json(); } catch { throw Object.assign(new Error(`サーバーからの応答が読み取れませんでした (HTTP ${res.status})`), { retryable: true }); }
+          try { data = await res.json(); }
+          catch { throw Object.assign(
+            new Error(`サーバーからの応答が読み取れませんでした (HTTP ${res.status})`),
+            { retryable: true }
+          ); }
           if (!res.ok) {
-            const errMsg = typeof data.error === "string" ? data.error : `エラーが発生しました (HTTP ${res.status})`;
-            throw Object.assign(new Error(errMsg), { retryable: res.status !== 400 && res.status !== 401 && res.status !== 403 });
+            const msg = typeof data.error === "string"
+              ? data.error : `エラーが発生しました (HTTP ${res.status})`;
+            throw Object.assign(new Error(msg), {
+              retryable: res.status !== 400 && res.status !== 401 && res.status !== 403
+            });
           }
-          if (!data.text) throw Object.assign(new Error("AIからの返答が空でした。もう一度話しかけてみてください"), { retryable: true });
+          if (!data.text) throw Object.assign(
+            new Error("AIからの返答が空でした。もう一度話しかけてみてください"),
+            { retryable: true }
+          );
 
-          const raw = data.text;
-          const ja = extractJA(raw);
-          const korean = extractKorean(raw);
+          const ja     = extractJA(data.text);
+          const korean = extractKorean(data.text);
           setMessages(prev => [...prev, { role: "assistant", content: korean, ja, showJA: false }]);
-          if (autoSpeak && korean) { setIsSpeaking(true); speakKorean(korean, () => setIsSpeaking(false)); }
+          if (autoSpeak && korean) {
+            setIsSpeaking(true);
+            speakKorean(korean, () => setIsSpeaking(false));
+          }
           return;
         } catch (e) {
           lastError = e;
@@ -164,15 +302,16 @@ export default function App() {
   };
 
   const quickReplies = [
-    { l: "네", v: "네" },
-    { l: "아니요", v: "아니요" },
+    { l: "네",       v: "네" },
+    { l: "아니요",   v: "아니요" },
     { l: "모르겠어요", v: "모르겠어요" },
     { l: "다시 해주세요", v: "다시 해주세요" },
   ];
 
   return (
     <div style={c.app}>
-      {/* ヘッダー */}
+
+      {/* ══ ヘッダー ══ */}
       <div style={c.header}>
         <div style={c.hLeft}>
           <span style={{ fontSize: 24 }}>🇰🇷</span>
@@ -183,7 +322,8 @@ export default function App() {
         </div>
         <div style={c.hRight}>
           {ttsOk && (
-            <button style={c.iconBtn} onClick={() => setAutoSpeak(v => !v)} title={autoSpeak ? "自動読み上げON" : "自動読み上げOFF"}>
+            <button style={c.iconBtn} onClick={() => setAutoSpeak(v => !v)}
+                    title={autoSpeak ? "自動読み上げON" : "自動読み上げOFF"}>
               {autoSpeak ? "🔊" : "🔇"}
             </button>
           )}
@@ -191,62 +331,75 @@ export default function App() {
           <button
             style={c.verBtn}
             onClick={() => { setShowChangelog(true); localStorage.setItem("seen_version", CURRENT_VERSION); }}
-            title="アップデート履歴を見る"
+            title="アップデート履歴"
           >
             v{CURRENT_VERSION}
-            {isNewVersion && <span style={c.newDot} />}
+            {isNewVersion && <span style={c.newDot}/>}
           </button>
         </div>
       </div>
 
       <div style={c.body}>
-        {/* チャット */}
+        {/* ══ チャット列 ══ */}
         <div style={c.chatCol}>
+
+          {/* ── アバターパネル ── */}
+          <div style={c.avatarPanel}>
+            <SonaAvatar speaking={isSpeaking}/>
+            <div style={c.avatarInfo}>
+              <div style={c.avatarName}>소나 선생님</div>
+              <div style={c.avatarStatus}>
+                {isSpeaking ? "🗣 話し中…"
+                 : loading  ? "💭 考え中…"
+                 :             "✨ 待機中"}
+              </div>
+            </div>
+          </div>
+
+          {/* ── メッセージ ── */}
           <div style={c.msgs}>
             {messages.map((m, i) => (
               <div key={i} style={{ ...c.row, ...(m.role === "user" ? c.rowUser : {}) }}>
                 {m.role === "assistant" && (
-                  <div style={c.who}><span>🌸</span><span style={c.name}>소나 선생님</span></div>
+                  <div style={c.who}>
+                    <span style={c.name}>소나 선생님</span>
+                  </div>
                 )}
 
                 {m.role === "user" ? (
-                  /* ユーザーメッセージ */
                   <div style={{ ...c.bubble, ...c.bubbleU }}>
-                    {m.content.split("\n").map((ln, j, a) => <span key={j}>{ln}{j < a.length - 1 && <br />}</span>)}
+                    {m.content.split("\n").map((ln, j, a) =>
+                      <span key={j}>{ln}{j < a.length - 1 && <br/>}</span>
+                    )}
                   </div>
                 ) : (
-                  /* ソナ先生のメッセージ */
                   <div>
                     <div style={{ ...c.bubble, ...c.bubbleA }}>
-                      {/* 韓国語本文 */}
-                      {m.content.split("\n").map((ln, j, a) => <span key={j}>{ln}{j < a.length - 1 && <br />}</span>)}
-                      {/* 日本語訳（トグルで表示） */}
+                      {m.content.split("\n").map((ln, j, a) =>
+                        <span key={j}>{ln}{j < a.length - 1 && <br/>}</span>
+                      )}
                       {m.showJA && m.ja && (
                         <div style={c.jaBlock}>
-                          {m.ja.split("\n").map((ln, j, a) => <span key={j}>{ln}{j < a.length - 1 && <br />}</span>)}
+                          {m.ja.split("\n").map((ln, j, a) =>
+                            <span key={j}>{ln}{j < a.length - 1 && <br/>}</span>
+                          )}
                         </div>
                       )}
                     </div>
-                    {/* アクションボタン（システムメッセージは除く） */}
                     {!m.isSystem && (
                       <div style={c.msgActions}>
                         {ttsOk && (
-                          <button
-                            style={c.actionBtn}
-                            title="韓国語を読み上げ"
+                          <button style={c.actionBtn} title="読み上げ"
                             onClick={() => {
                               if (isSpeaking) { window.speechSynthesis.cancel(); setIsSpeaking(false); }
                               else { setIsSpeaking(true); speakKorean(m.content, () => setIsSpeaking(false)); }
-                            }}
-                          >🔊 읽기</button>
+                            }}>🔊 읽기</button>
                         )}
                         {m.ja && (
                           <button
                             style={{ ...c.actionBtn, ...(m.showJA ? c.actionBtnOn : {}) }}
                             onClick={() => toggleJA(i)}
-                          >
-                            {m.showJA ? "日訳を隠す" : "🇯🇵 日訳を見る"}
-                          </button>
+                          >{m.showJA ? "日訳を隠す" : "🇯🇵 日訳を見る"}</button>
                         )}
                       </div>
                     )}
@@ -258,26 +411,29 @@ export default function App() {
             {/* ローディング / リトライ */}
             {loading && (
               <div style={c.row}>
-                <div style={c.who}><span>🌸</span></div>
+                <div style={c.who}/>
                 {retryInfo ? (
                   <div style={{ ...c.bubble, ...c.bubbleA, padding: "11px 14px", color: "#e85d6b", fontSize: 13 }}>
                     ⏳ {retryInfo.countdown}秒後に再試行します… ({retryInfo.attempt}/{retryInfo.max}回目)
                   </div>
                 ) : (
                   <div style={{ ...c.bubble, ...c.bubbleA, padding: "14px 18px", display: "flex", gap: 5 }}>
-                    {[0, 0.2, 0.4].map((d, k) => <span key={k} style={{ ...c.dot, animationDelay: `${d}s` }} />)}
+                    {[0, 0.2, 0.4].map((d, k) =>
+                      <span key={k} style={{ ...c.dot, animationDelay: `${d}s` }}/>
+                    )}
                   </div>
                 )}
               </div>
             )}
-            <div ref={bottomRef} />
+            <div ref={bottomRef}/>
           </div>
 
           {/* クイックリプライ */}
           {started && (
             <div style={c.quick}>
               {quickReplies.map(q => (
-                <button key={q.v} style={c.qBtn} onClick={() => send(q.v)} disabled={loading}>{q.l}</button>
+                <button key={q.v} style={c.qBtn}
+                        onClick={() => send(q.v)} disabled={loading}>{q.l}</button>
               ))}
             </div>
           )}
@@ -285,17 +441,16 @@ export default function App() {
           {/* 入力エリア */}
           <div style={c.inputArea}>
             {!started ? (
-              <button style={c.startBtn} onClick={() => { setStarted(true); send("시작！（始める）"); }}>
+              <button style={c.startBtn}
+                      onClick={() => { setStarted(true); send("시작！（始める）"); }}>
                 시작！　会話を始める 🌸
               </button>
             ) : (
               <>
-                {/* マイク＋言語切り替え */}
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0 }}>
                   <button
                     style={{ ...c.micBtn, background: micState === "listening" ? "#e85d6b" : "#f0d9d9", opacity: micState === "unsupported" ? 0.3 : 1 }}
-                    onClick={toggleMic}
-                    disabled={micState === "unsupported"}
+                    onClick={toggleMic} disabled={micState === "unsupported"}
                     title={micState === "unsupported" ? "Chrome推奨" : micState === "listening" ? "停止" : "音声入力"}
                   >
                     <span style={{ fontSize: 20 }}>{micState === "listening" ? "⏹" : "🎤"}</span>
@@ -303,29 +458,25 @@ export default function App() {
                   <button
                     style={micState === "unsupported" ? { display: "none" } : {
                       border: "none", background: micLang === "ko-KR" ? "#e85d6b" : "#888",
-                      color: "#fff", borderRadius: 6, padding: "2px 5px", fontSize: 9,
-                      cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap",
+                      color: "#fff", borderRadius: 6, padding: "2px 5px",
+                      fontSize: 9, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap",
                     }}
                     onClick={() => setMicLang(l => l === "ko-KR" ? "ja-JP" : "ko-KR")}
-                    title="音声入力言語を切り替え"
+                    title="言語切り替え"
                   >
                     {micLang === "ko-KR" ? "한국어" : "日本語"}
                   </button>
                 </div>
                 <textarea
-                  ref={inputRef}
-                  style={c.ta}
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
+                  ref={inputRef} style={c.ta}
+                  value={input} onChange={e => setInput(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
                   placeholder={micState === "listening" ? "🎤 聞いています..." : "韓国語か日本語で入力… (Enter送信)"}
-                  rows={2}
-                  disabled={loading || micState === "listening"}
+                  rows={2} disabled={loading || micState === "listening"}
                 />
                 <button
                   style={{ ...c.sendBtn, opacity: (!input.trim() || loading) ? 0.45 : 1 }}
-                  onClick={() => send(input)}
-                  disabled={!input.trim() || loading}
+                  onClick={() => send(input)} disabled={!input.trim() || loading}
                 >送信</button>
               </>
             )}
@@ -337,32 +488,19 @@ export default function App() {
           )}
         </div>
 
-        {/* 単語メモ（サイドバー） */}
+        {/* ══ 単語メモ（サイドバー） ══ */}
         <div style={c.side}>
           <div style={c.sideTitle}>📝 単語メモ</div>
-          {/* 追加フォーム */}
           <div style={c.vocabForm}>
-            <input
-              style={c.vocabInput}
-              placeholder="단어 (韓国語)"
-              value={newWord}
-              onChange={e => setNewWord(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && addVocab()}
-            />
-            <input
-              style={c.vocabInput}
-              placeholder="意味 (日本語)"
-              value={newMeaning}
-              onChange={e => setNewMeaning(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && addVocab()}
-            />
-            <button
-              style={{ ...c.vocabAddBtn, opacity: !newWord.trim() ? 0.4 : 1 }}
-              onClick={addVocab}
-              disabled={!newWord.trim()}
-            >＋ 追加</button>
+            <input style={c.vocabInput} placeholder="단어 (韓国語)"
+                   value={newWord} onChange={e => setNewWord(e.target.value)}
+                   onKeyDown={e => e.key === "Enter" && addVocab()}/>
+            <input style={c.vocabInput} placeholder="意味 (日本語)"
+                   value={newMeaning} onChange={e => setNewMeaning(e.target.value)}
+                   onKeyDown={e => e.key === "Enter" && addVocab()}/>
+            <button style={{ ...c.vocabAddBtn, opacity: !newWord.trim() ? 0.4 : 1 }}
+                    onClick={addVocab} disabled={!newWord.trim()}>＋ 追加</button>
           </div>
-          {/* 単語一覧 */}
           {vocab.length === 0
             ? <div style={c.sideEmpty}>覚えたい単語を自由に追加しましょう</div>
             : vocab.map((v, i) => (
@@ -378,7 +516,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* チェンジログモーダル */}
+      {/* ══ チェンジログモーダル ══ */}
       {showChangelog && (
         <div style={c.overlay} onClick={() => setShowChangelog(false)}>
           <div style={c.modal} onClick={e => e.stopPropagation()}>
@@ -390,12 +528,16 @@ export default function App() {
               {CHANGELOG.map((entry, i) => (
                 <div key={entry.version} style={{ ...c.clEntry, ...(i === 0 ? c.clEntryLatest : {}) }}>
                   <div style={c.clVerRow}>
-                    <span style={{ ...c.clVer, ...(i === 0 ? c.clVerLatest : {}) }}>v{entry.version}</span>
+                    <span style={{ ...c.clVer, ...(i === 0 ? c.clVerLatest : {}) }}>
+                      v{entry.version}
+                    </span>
                     {i === 0 && <span style={c.clLatestTag}>最新</span>}
                     <span style={c.clDate}>{entry.date}</span>
                   </div>
                   <ul style={c.clList}>
-                    {entry.changes.map((ch, j) => <li key={j} style={c.clItem}>• {ch}</li>)}
+                    {entry.changes.map((ch, j) =>
+                      <li key={j} style={c.clItem}>• {ch}</li>
+                    )}
                   </ul>
                 </div>
               ))}
@@ -404,71 +546,158 @@ export default function App() {
         </div>
       )}
 
+      {/* ══ CSS アニメーション ══ */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }
+
+        /* ── ドットローディング ── */
+        @keyframes bounce {
+          0%,80%,100% { transform: translateY(0); }
+          40%          { transform: translateY(-6px); }
+        }
+
+        /* ── まばたき ──
+           eyelid は顔色の楕円。scaleY(0) = 透明（目が開いている）
+           scaleY(1) = 完全に表示（目が閉じている）            */
+        @keyframes blink {
+          0%, 90%      { transform: scaleY(0); }
+          92%, 96%     { transform: scaleY(1); }
+          99%, 100%    { transform: scaleY(0); }
+        }
+        .eyelid-l {
+          transform-origin: 35px 46.5px;
+          animation: blink 3.8s linear infinite;
+        }
+        .eyelid-r {
+          transform-origin: 65px 46.5px;
+          animation: blink 3.8s linear infinite;
+          animation-delay: 0.04s;
+        }
+
+        /* ── 口パク ──
+           transform-origin を口の上端に置き scaleY で開閉  */
+        @keyframes mouth-speak {
+          0%, 100% { transform: scaleY(0.1); }
+          50%      { transform: scaleY(1);   }
+        }
+        .mouth-anim {
+          transform-origin: 50px 73px;
+          animation: mouth-speak 0.28s ease-in-out infinite;
+        }
       `}</style>
     </div>
   );
 }
 
+/* ════════════════════════════════════════
+   スタイル定数
+════════════════════════════════════════ */
 const c = {
-  app: { display: "flex", flexDirection: "column", height: "100vh", background: "#fdf6f0", fontFamily: "'Noto Sans JP','Noto Sans KR',sans-serif" },
-  header: { background: "#e85d6b", color: "#fff", padding: "11px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 },
-  hLeft: { display: "flex", alignItems: "center", gap: 10 },
-  hRight: { display: "flex", alignItems: "center", gap: 8 },
-  hTitle: { fontSize: 16, fontWeight: 700 },
-  hSub: { fontSize: 10, opacity: 0.85 },
-  iconBtn: { background: "rgba(255,255,255,.2)", border: "none", borderRadius: 18, padding: "3px 9px", fontSize: 15, cursor: "pointer", color: "#fff" },
-  badge: { background: "#fff", color: "#e85d6b", fontWeight: 700, fontSize: 13, borderRadius: 16, padding: "3px 11px" },
-  verBtn: { position: "relative", background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.5)", color: "#fff", borderRadius: 12, padding: "3px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.02em" },
-  newDot: { position: "absolute", top: -3, right: -3, width: 8, height: 8, borderRadius: "50%", background: "#ffdd57", display: "inline-block", border: "1.5px solid #e85d6b" },
-  body: { display: "flex", flex: 1, overflow: "hidden" },
-  chatCol: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
-  msgs: { flex: 1, overflowY: "auto", padding: "12px", display: "flex", flexDirection: "column", gap: 10 },
-  row: { display: "flex", flexDirection: "column", maxWidth: "86%", alignSelf: "flex-start", gap: 3 },
-  rowUser: { alignSelf: "flex-end" },
-  who: { display: "flex", alignItems: "center", gap: 5, marginBottom: 2 },
-  name: { fontSize: 11, color: "#aaa", fontWeight: 600 },
-  bubble: { padding: "9px 12px", fontSize: 14, lineHeight: 1.75, borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,.06)", whiteSpace: "pre-wrap", wordBreak: "break-word" },
-  bubbleA: { background: "#fff", border: "1px solid #f0d9d9", color: "#333" },
-  bubbleU: { background: "#e85d6b", color: "#fff" },
-  jaBlock: { marginTop: 10, paddingTop: 10, borderTop: "1px dashed #f0d9d9", color: "#888", fontSize: 13, lineHeight: 1.7 },
+  app:        { display: "flex", flexDirection: "column", height: "100vh",
+                background: "#fdf6f0", fontFamily: "'Noto Sans JP','Noto Sans KR',sans-serif" },
+  /* Header */
+  header:     { background: "#e85d6b", color: "#fff", padding: "11px 16px",
+                display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 },
+  hLeft:      { display: "flex", alignItems: "center", gap: 10 },
+  hRight:     { display: "flex", alignItems: "center", gap: 8 },
+  hTitle:     { fontSize: 16, fontWeight: 700 },
+  hSub:       { fontSize: 10, opacity: 0.85 },
+  iconBtn:    { background: "rgba(255,255,255,.2)", border: "none", borderRadius: 18,
+                padding: "3px 9px", fontSize: 15, cursor: "pointer", color: "#fff" },
+  badge:      { background: "#fff", color: "#e85d6b", fontWeight: 700,
+                fontSize: 13, borderRadius: 16, padding: "3px 11px" },
+  verBtn:     { position: "relative", background: "rgba(255,255,255,.15)",
+                border: "1px solid rgba(255,255,255,.5)", color: "#fff", borderRadius: 12,
+                padding: "3px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" },
+  newDot:     { position: "absolute", top: -3, right: -3, width: 8, height: 8,
+                borderRadius: "50%", background: "#ffdd57",
+                display: "inline-block", border: "1.5px solid #e85d6b" },
+  /* Layout */
+  body:       { display: "flex", flex: 1, overflow: "hidden" },
+  chatCol:    { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
+  /* Avatar panel */
+  avatarPanel:{ display: "flex", alignItems: "center", gap: 14, padding: "8px 16px 6px",
+                background: "linear-gradient(to right,#fff0f2,#fff8f6)",
+                borderBottom: "1px solid #f0d9d9", flexShrink: 0 },
+  avatarInfo: { display: "flex", flexDirection: "column", gap: 3 },
+  avatarName: { fontSize: 14, fontWeight: 700, color: "#333" },
+  avatarStatus:{ fontSize: 11, color: "#b08080" },
+  /* Messages */
+  msgs:       { flex: 1, overflowY: "auto", padding: "12px",
+                display: "flex", flexDirection: "column", gap: 10 },
+  row:        { display: "flex", flexDirection: "column", maxWidth: "86%",
+                alignSelf: "flex-start", gap: 3 },
+  rowUser:    { alignSelf: "flex-end" },
+  who:        { display: "flex", alignItems: "center", gap: 5, marginBottom: 2 },
+  name:       { fontSize: 11, color: "#aaa", fontWeight: 600 },
+  bubble:     { padding: "9px 12px", fontSize: 14, lineHeight: 1.75, borderRadius: 14,
+                boxShadow: "0 1px 3px rgba(0,0,0,.06)", whiteSpace: "pre-wrap", wordBreak: "break-word" },
+  bubbleA:    { background: "#fff", border: "1px solid #f0d9d9", color: "#333" },
+  bubbleU:    { background: "#e85d6b", color: "#fff" },
+  jaBlock:    { marginTop: 10, paddingTop: 10, borderTop: "1px dashed #f0d9d9",
+                color: "#888", fontSize: 13, lineHeight: 1.7 },
   msgActions: { display: "flex", gap: 5, marginTop: 4 },
-  actionBtn: { background: "#fff", border: "1px solid #eee", borderRadius: 14, padding: "3px 10px", fontSize: 11, cursor: "pointer", color: "#bbb", fontFamily: "inherit" },
-  actionBtnOn: { background: "#fff0f2", border: "1px solid #e85d6b", color: "#e85d6b" },
-  dot: { width: 7, height: 7, borderRadius: "50%", background: "#e85d6b", display: "inline-block", animation: "bounce 1.2s infinite" },
-  quick: { padding: "6px 12px", display: "flex", gap: 6, flexWrap: "wrap", borderTop: "1px solid #f0d9d9", background: "#fff8f6", flexShrink: 0 },
-  qBtn: { background: "#fff", border: "1px solid #e85d6b", color: "#e85d6b", borderRadius: 18, padding: "4px 11px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" },
-  inputArea: { padding: "9px 12px", background: "#fff", borderTop: "1px solid #f0d9d9", display: "flex", gap: 6, alignItems: "center", flexShrink: 0 },
-  micBtn: { border: "none", borderRadius: "50%", width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
-  ta: { flex: 1, border: "1.5px solid #f0d9d9", borderRadius: 11, padding: "7px 10px", fontSize: 14, fontFamily: "inherit", resize: "none", outline: "none", lineHeight: 1.5, background: "#fdf6f0" },
-  sendBtn: { background: "#e85d6b", color: "#fff", border: "none", borderRadius: 9, padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" },
-  startBtn: { flex: 1, background: "#e85d6b", color: "#fff", border: "none", borderRadius: 11, padding: "12px", fontSize: 15, fontWeight: 700, cursor: "pointer" },
-  listenBar: { background: "#fce8ea", color: "#c0392b", fontSize: 11, padding: "5px 14px", textAlign: "center", flexShrink: 0 },
-  // 単語メモ（サイドバー）
-  side: { width: 175, borderLeft: "1px solid #f0d9d9", background: "#fffaf8", padding: 10, overflowY: "auto", display: "flex", flexDirection: "column", gap: 7, flexShrink: 0 },
-  sideTitle: { fontSize: 12, fontWeight: 700, color: "#e85d6b", borderBottom: "1px solid #f0d9d9", paddingBottom: 6, marginBottom: 2 },
-  sideEmpty: { fontSize: 11, color: "#ccc", lineHeight: 1.6, textAlign: "center", marginTop: 8 },
-  vocabForm: { display: "flex", flexDirection: "column", gap: 5 },
-  vocabInput: { border: "1px solid #f0d9d9", borderRadius: 7, padding: "5px 7px", fontSize: 11, fontFamily: "inherit", outline: "none", background: "#fff", width: "100%" },
-  vocabAddBtn: { background: "#e85d6b", color: "#fff", border: "none", borderRadius: 7, padding: "5px 0", fontSize: 11, fontWeight: 700, cursor: "pointer" },
-  vocabItem: { background: "#fff", border: "1px solid #f0d9d9", borderRadius: 8, padding: "5px 7px", display: "flex", alignItems: "flex-start", gap: 4 },
-  vocabDelBtn: { background: "none", border: "none", color: "#ddd", cursor: "pointer", fontSize: 14, padding: "0 1px", flexShrink: 0, lineHeight: 1 },
-  // チェンジログモーダル
-  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
-  modal: { background: "#fff", borderRadius: 16, width: "min(92vw, 420px)", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px rgba(0,0,0,.2)", overflow: "hidden" },
-  modalHeader: { background: "#e85d6b", color: "#fff", padding: "13px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 },
-  closeBtn: { background: "rgba(255,255,255,.2)", border: "none", color: "#fff", borderRadius: "50%", width: 28, height: 28, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
-  modalBody: { overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14 },
-  clEntry: { borderRadius: 10, padding: "11px 13px", background: "#fdf6f0", border: "1px solid #f0d9d9" },
-  clEntryLatest: { background: "#fff0f2", border: "1.5px solid #e85d6b" },
-  clVerRow: { display: "flex", alignItems: "center", gap: 7, marginBottom: 7 },
-  clVer: { fontWeight: 700, fontSize: 14, color: "#888" },
-  clVerLatest: { color: "#e85d6b" },
-  clLatestTag: { background: "#e85d6b", color: "#fff", borderRadius: 8, padding: "1px 7px", fontSize: 10, fontWeight: 700 },
-  clDate: { fontSize: 11, color: "#aaa", marginLeft: "auto" },
-  clList: { listStyle: "none", display: "flex", flexDirection: "column", gap: 4 },
-  clItem: { fontSize: 13, color: "#555", lineHeight: 1.6 },
+  actionBtn:  { background: "#fff", border: "1px solid #eee", borderRadius: 14,
+                padding: "3px 10px", fontSize: 11, cursor: "pointer", color: "#bbb", fontFamily: "inherit" },
+  actionBtnOn:{ background: "#fff0f2", border: "1px solid #e85d6b", color: "#e85d6b" },
+  dot:        { width: 7, height: 7, borderRadius: "50%", background: "#e85d6b",
+                display: "inline-block", animation: "bounce 1.2s infinite" },
+  /* Quick replies */
+  quick:      { padding: "6px 12px", display: "flex", gap: 6, flexWrap: "wrap",
+                borderTop: "1px solid #f0d9d9", background: "#fff8f6", flexShrink: 0 },
+  qBtn:       { background: "#fff", border: "1px solid #e85d6b", color: "#e85d6b",
+                borderRadius: 18, padding: "4px 11px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" },
+  /* Input */
+  inputArea:  { padding: "9px 12px", background: "#fff", borderTop: "1px solid #f0d9d9",
+                display: "flex", gap: 6, alignItems: "center", flexShrink: 0 },
+  micBtn:     { border: "none", borderRadius: "50%", width: 40, height: 40,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", flexShrink: 0 },
+  ta:         { flex: 1, border: "1.5px solid #f0d9d9", borderRadius: 11, padding: "7px 10px",
+                fontSize: 14, fontFamily: "inherit", resize: "none", outline: "none",
+                lineHeight: 1.5, background: "#fdf6f0" },
+  sendBtn:    { background: "#e85d6b", color: "#fff", border: "none", borderRadius: 9,
+                padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" },
+  startBtn:   { flex: 1, background: "#e85d6b", color: "#fff", border: "none",
+                borderRadius: 11, padding: "12px", fontSize: 15, fontWeight: 700, cursor: "pointer" },
+  listenBar:  { background: "#fce8ea", color: "#c0392b", fontSize: 11,
+                padding: "5px 14px", textAlign: "center", flexShrink: 0 },
+  /* Vocab sidebar */
+  side:       { width: 175, borderLeft: "1px solid #f0d9d9", background: "#fffaf8",
+                padding: 10, overflowY: "auto", display: "flex", flexDirection: "column",
+                gap: 7, flexShrink: 0 },
+  sideTitle:  { fontSize: 12, fontWeight: 700, color: "#e85d6b",
+                borderBottom: "1px solid #f0d9d9", paddingBottom: 6, marginBottom: 2 },
+  sideEmpty:  { fontSize: 11, color: "#ccc", lineHeight: 1.6, textAlign: "center", marginTop: 8 },
+  vocabForm:  { display: "flex", flexDirection: "column", gap: 5 },
+  vocabInput: { border: "1px solid #f0d9d9", borderRadius: 7, padding: "5px 7px",
+                fontSize: 11, fontFamily: "inherit", outline: "none", background: "#fff", width: "100%" },
+  vocabAddBtn:{ background: "#e85d6b", color: "#fff", border: "none", borderRadius: 7,
+                padding: "5px 0", fontSize: 11, fontWeight: 700, cursor: "pointer" },
+  vocabItem:  { background: "#fff", border: "1px solid #f0d9d9", borderRadius: 8,
+                padding: "5px 7px", display: "flex", alignItems: "flex-start", gap: 4 },
+  vocabDelBtn:{ background: "none", border: "none", color: "#ddd", cursor: "pointer",
+                fontSize: 14, padding: "0 1px", flexShrink: 0, lineHeight: 1 },
+  /* Changelog modal */
+  overlay:    { position: "fixed", inset: 0, background: "rgba(0,0,0,.45)",
+                display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
+  modal:      { background: "#fff", borderRadius: 16, width: "min(92vw,420px)",
+                maxHeight: "80vh", display: "flex", flexDirection: "column",
+                boxShadow: "0 8px 40px rgba(0,0,0,.2)", overflow: "hidden" },
+  modalHeader:{ background: "#e85d6b", color: "#fff", padding: "13px 16px",
+                display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 },
+  closeBtn:   { background: "rgba(255,255,255,.2)", border: "none", color: "#fff",
+                borderRadius: "50%", width: 28, height: 28, fontSize: 13, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center" },
+  modalBody:  { overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14 },
+  clEntry:    { borderRadius: 10, padding: "11px 13px", background: "#fdf6f0", border: "1px solid #f0d9d9" },
+  clEntryLatest:{ background: "#fff0f2", border: "1.5px solid #e85d6b" },
+  clVerRow:   { display: "flex", alignItems: "center", gap: 7, marginBottom: 7 },
+  clVer:      { fontWeight: 700, fontSize: 14, color: "#888" },
+  clVerLatest:{ color: "#e85d6b" },
+  clLatestTag:{ background: "#e85d6b", color: "#fff", borderRadius: 8, padding: "1px 7px", fontSize: 10, fontWeight: 700 },
+  clDate:     { fontSize: 11, color: "#aaa", marginLeft: "auto" },
+  clList:     { listStyle: "none", display: "flex", flexDirection: "column", gap: 4 },
+  clItem:     { fontSize: 13, color: "#555", lineHeight: 1.6 },
 };
