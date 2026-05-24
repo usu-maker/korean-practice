@@ -63,14 +63,6 @@ const MAX_RETRIES = 3;
 const RETRY_WAIT_SEC = 3;
 
 /* ════════════════════════════════════════
-   ソナ先生アバター（実写画像 + CSSオーバーレイ）
-   - .sona-idle    : 待機中（ゆっくり呼吸スケール）
-   - .sona-speaking: 読み上げ中（縦ゆれ＋ピンクグロー）
-   - .sona-blink   : まばたきオーバーレイ（常時）
-   - .sona-mouth   : 口パクオーバーレイ（isSpeaking 時）
-════════════════════════════════════════ */
-
-/* ════════════════════════════════════════
    メインコンポーネント
 ════════════════════════════════════════ */
 export default function App() {
@@ -257,21 +249,14 @@ export default function App() {
 
           {/* ── アバターパネル（上部中央） ── */}
           <div style={c.avatarPanel}>
-            {/* 円形アバター＋アニメーションオーバーレイ */}
-            <div
-              style={c.avatarWrap}
-              className={isSpeaking ? "sona-speaking" : "sona-idle"}
-            >
+            {/* 円形アバター：待機中→idle.gif、話し中→talking.gif */}
+            <div style={c.avatarWrap}>
               <img
-                src="/sona.png"
+                src={isSpeaking ? "/sona-talking.gif" : "/sona-idle.gif"}
                 alt="소나 선생님"
                 style={c.avatarImg}
                 draggable={false}
               />
-              {/* まばたきオーバーレイ（常時アニメ） */}
-              <div className="sona-blink" />
-              {/* 口パクオーバーレイ（読み上げ中のみ） */}
-              {isSpeaking && <div className="sona-mouth" />}
             </div>
 
             <div style={c.avatarName}>소나 선생님</div>
@@ -483,82 +468,6 @@ export default function App() {
           40%          { transform: translateY(-6px); }
         }
 
-        /* ════════════════════════════════
-           アバター: 待機中（ゆっくり呼吸）
-        ════════════════════════════════ */
-        @keyframes sona-breathe {
-          0%, 100% { transform: scale(1);     }
-          50%      { transform: scale(1.025); }
-        }
-        .sona-idle {
-          animation: sona-breathe 5s ease-in-out infinite;
-        }
-
-        /* ════════════════════════════════
-           アバター: 読み上げ中（縦ゆれ＋ピンクグロー）
-        ════════════════════════════════ */
-        @keyframes sona-speak {
-          0%,100% { transform: translateY(0)   scale(1);     }
-          25%     { transform: translateY(-3px) scale(1.02); }
-          75%     { transform: translateY(2px)  scale(0.99); }
-        }
-        @keyframes sona-glow {
-          0%,100% { box-shadow: 0 0  8px 2px rgba(232,93,107,.45); }
-          50%     { box-shadow: 0 0 20px 6px rgba(232,93,107,.80); }
-        }
-        .sona-speaking {
-          animation:
-            sona-speak 0.45s ease-in-out infinite,
-            sona-glow  0.45s ease-in-out infinite;
-        }
-
-        /* ════════════════════════════════
-           まばたきオーバーレイ
-           - scaleY(0) = まぶた非表示（目が開いている）
-           - scaleY(1) = まぶた表示  （目が閉じている）
-           ★ top / height は画像の目の位置に合わせて調整
-        ════════════════════════════════ */
-        .sona-blink {
-          position: absolute;
-          left: 10%;
-          width: 80%;
-          top: 34%;      /* ← 目の上端（画像に合わせて調整） */
-          height: 13%;   /* ← 目の高さ（画像に合わせて調整） */
-          background: rgba(18, 6, 3, 0.88);
-          border-radius: 0 0 60% 60% / 0 0 100% 100%;
-          transform: scaleY(0);
-          transform-origin: top center;
-          pointer-events: none;
-          animation: sona-blink-anim 4.2s linear infinite;
-        }
-        @keyframes sona-blink-anim {
-          0%, 88%  { transform: scaleY(0); }
-          91%      { transform: scaleY(1); }
-          95%      { transform: scaleY(1); }
-          98%      { transform: scaleY(0); }
-          100%     { transform: scaleY(0); }
-        }
-
-        /* ════════════════════════════════
-           口パクオーバーレイ（isSpeaking 時のみ表示）
-           ★ top / height は画像の口の位置に合わせて調整
-        ════════════════════════════════ */
-        .sona-mouth {
-          position: absolute;
-          left: 28%;
-          width: 44%;
-          top: 64%;      /* ← 口の上端（画像に合わせて調整） */
-          height: 10%;   /* ← 口の高さ（画像に合わせて調整） */
-          background: rgba(140, 35, 55, 0.45);
-          border-radius: 0 0 50% 50% / 0 0 100% 100%;
-          transform-origin: top center;
-          pointer-events: none;
-          animation: sona-mouth-anim 0.30s ease-in-out infinite;
-        }
-        @keyframes sona-mouth-anim {
-          0%,100% { transform: scaleY(0.08); opacity: 0.5; }
-          50%     { transform: scaleY(1);    opacity: 0.9; }
-        }
       `}</style>
     </div>
   );
