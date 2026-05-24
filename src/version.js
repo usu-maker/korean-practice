@@ -1,6 +1,24 @@
-export const CURRENT_VERSION = "1.5.0";
+export const CURRENT_VERSION = "1.7.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.7.0",
+    date: "2026/05/25",
+    changes: [
+      "会話開始前にテーマ選択画面を追加（ゲーム・アニメ・スポーツ・K-pop・料理・旅行）",
+      "Tavily検索でテーマの最新情報を取得し、ソナ先生が把握した状態で会話",
+      "待機中はsona.png静止画、話し中のみsona-talking.gifに切り替え",
+      "チャットの行間を詰めて読みやすく改善（lineHeight 1.4）",
+    ],
+  },
+  {
+    version: "1.6.0",
+    date: "2026/05/24",
+    changes: [
+      "CSSアニメーションをGIFアニメに置き換え",
+      "待機中：sona-idle.gif、話し中：sona-talking.gif",
+    ],
+  },
   {
     version: "1.5.0",
     date: "2026/05/24",

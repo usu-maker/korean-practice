@@ -1,4 +1,49 @@
-// api/chat.js - Vercel Serverless Function (Gemini 2.5 Flash Lite)
+// api/chat.js - Vercel Serverless Function (Gemini 2.5 Flash Lite + Tavily Search)
+
+/* ─── Tavily 検索 ─── */
+async function tavilySearch(query) {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const res = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query,
+        search_depth: 'basic',
+        max_results: 3,
+        include_answer: true,
+        include_raw_content: false,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    // answer が最も簡潔。なければ results の snippet を結合
+    if (data.answer) return data.answer;
+    if (data.results && data.results.length > 0) {
+      return data.results
+        .slice(0, 3)
+        .map(r => r.content || r.snippet || '')
+        .filter(Boolean)
+        .join('\n');
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/* ─── テーマ別 Tavily 検索クエリ ─── */
+const THEME_QUERIES = {
+  game:    '韓国 人気ゲーム 話題 2025 最新',
+  anime:   '韓国 日本アニメ 人気 おすすめ 2025',
+  sports:  '韓国 スポーツ 最新ニュース 2025',
+  kpop:    'K-pop 人気グループ 最新曲 2025',
+  cooking: '韓国料理 人気メニュー トレンド 2025',
+  travel:  '韓国旅行 人気観光地 おすすめ 2025',
+};
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -9,9 +54,23 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'APIキーが設定されていません。Vercelの環境変数を確認してください' });
 
-  const { messages, system } = req.body;
+  const { messages, system, theme } = req.body;
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'メッセージの形式が正しくありません' });
+  }
+
+  /* ── システムプロンプト構築（Tavily 検索結果を追記） ── */
+  let systemPrompt = system || '';
+
+  if (theme && THEME_QUERIES[theme]) {
+    // 初回メッセージのみ検索（messages.length === 1 の場合）
+    const isFirstMessage = messages.length <= 1;
+    if (isFirstMessage) {
+      const searchResult = await tavilySearch(THEME_QUERIES[theme]);
+      if (searchResult) {
+        systemPrompt += `\n\n## 最新情報（テーマ：${theme}）\n以下はテーマに関する最新情報です。会話の中で自然に取り入れてください：\n${searchResult}`;
+      }
+    }
   }
 
   const contents = messages.map(m => ({
@@ -27,7 +86,7 @@ export default async function handler(req, res) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          system_instruction: { parts: [{ text: system || '' }] },
+          system_instruction: { parts: [{ text: systemPrompt }] },
           contents,
           generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
         }),

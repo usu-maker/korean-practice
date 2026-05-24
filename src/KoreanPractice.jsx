@@ -1,7 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { CURRENT_VERSION, CHANGELOG } from "./version";
 
-const SYSTEM_PROMPT = `あなたは韓国語会話練習の先生「ソナ先生」です。ユーザーはハングル検定5級取得を目指す超初心者の日本人です。
+/* ─── テーマ定義 ─── */
+const THEMES = [
+  { id: "game",    label: "ゲーム",   emoji: "🎮", ko: "게임" },
+  { id: "anime",   label: "アニメ",   emoji: "🎌", ko: "애니메이션" },
+  { id: "sports",  label: "スポーツ", emoji: "⚽", ko: "스포츠" },
+  { id: "kpop",    label: "K-pop",    emoji: "🎵", ko: "K팝" },
+  { id: "cooking", label: "料理",     emoji: "🍜", ko: "요리" },
+  { id: "travel",  label: "旅行",     emoji: "✈️", ko: "여행" },
+];
+
+/* ─── システムプロンプト ─── */
+const BASE_SYSTEM = `あなたは韓国語会話練習の先生「ソナ先生」です。ユーザーはハングル検定5級取得を目指す超初心者の日本人です。
 
 ## ルール
 - 必ず韓国語で話しかける（シンプルな文章、5級レベル）
@@ -23,6 +34,49 @@ const SYSTEM_PROMPT = `あなたは韓国語会話練習の先生「ソナ先生
 ## 5級レベルの目安
 - 基本あいさつ、自己紹介、数字、曜日、時間、基礎単語300語程度`;
 
+const THEME_SYSTEM_EXTRAS = {
+  game: `\n\n## 今日のテーマ：ゲーム（게임）
+- ゲームに関する話題を自然に振ってください
+- 例：「요즘 어떤 게임 해요？」「좋아하는 게임 캐릭터가 있어요？」
+- ゲームのキャラクターや最新作の話を取り入れてください
+- 最新情報が提供された場合は積極的に会話に使ってください`,
+
+  anime: `\n\n## 今日のテーマ：アニメ（애니메이션）
+- アニメに関する話題を自然に振ってください
+- 例：「좋아하는 애니메이션이 있어요？」「요즘 어떤 애니 봐요？」
+- 韓国でも人気のアニメ作品や今期話題の作品を取り入れてください
+- 最新情報が提供された場合は積極的に会話に使ってください`,
+
+  sports: `\n\n## 今日のテーマ：スポーツ（스포츠）
+- スポーツに関する話題を自然に振ってください
+- 例：「좋아하는 스포츠가 뭐예요？」「운동 자주 해요？」
+- 韓国の人気スポーツや選手、最新ニュースを取り入れてください
+- 最新情報が提供された場合は積極的に会話に使ってください`,
+
+  kpop: `\n\n## 今日のテーマ：K-pop（K팝）
+- K-popに関する話題を自然に振ってください
+- 例：「좋아하는 K팝 가수가 있어요？」「어떤 아이돌 좋아해요？」
+- 人気グループや最新曲・カムバック情報を取り入れてください
+- 最新情報が提供された場合は積極的に会話に使ってください`,
+
+  cooking: `\n\n## 今日のテーマ：料理（요리）
+- 韓国料理に関する話題を自然に振ってください
+- 例：「한국 음식 좋아해요？」「떡볶이 먹어봤어요？」
+- 人気韓国料理やトレンドのレシピ・食文化を取り入れてください
+- 最新情報が提供された場合は積極的に会話に使ってください`,
+
+  travel: `\n\n## 今日のテーマ：旅行（여행）
+- 韓国旅行に関する話題を自然に振ってください
+- 例：「한국에 가고 싶어요？」「서울에 가봤어요？」
+- ソウル・釜山など人気観光スポットや最新情報を取り入れてください
+- 最新情報が提供された場合は積極的に会話に使ってください`,
+};
+
+function buildSystemPrompt(theme) {
+  if (!theme) return BASE_SYSTEM;
+  return BASE_SYSTEM + (THEME_SYSTEM_EXTRAS[theme.id] || "");
+}
+
 /* ─── テキスト処理 ─── */
 function extractJA(t) {
   const m = t.match(/\[JA\]([\s\S]*?)\[\/JA\]/);
@@ -36,7 +90,6 @@ function extractKorean(t) {
 function getKoreanVoice() {
   try {
     const voices = window.speechSynthesis.getVoices();
-    // 若い女性の韓国語音声を優先
     const prefer = ["Yuna", "Heami", "유나", "Soyeon", "Google 한국의"];
     for (const n of prefer) {
       const v = voices.find(v => v.lang.startsWith("ko") && v.name.includes(n));
@@ -51,7 +104,7 @@ function speakKorean(text, onEnd) {
   const u = new SpeechSynthesisUtterance(text);
   u.lang  = "ko-KR";
   u.rate  = 0.85;
-  u.pitch = 1.2;   // 若い女性らしい高めのピッチ
+  u.pitch = 1.2;
   const voice = getKoreanVoice();
   if (voice) u.voice = voice;
   if (onEnd) u.onend = onEnd;
@@ -69,19 +122,20 @@ export default function App() {
   const [messages, setMessages] = useState([{
     role: "assistant",
     content: "안녕하세요！ 저는 소나 선생님이에요 🌸",
-    ja: "はじめまして！ソナ先生です。\n「시작！」ボタンで会話を始めましょう！",
+    ja: "はじめまして！ソナ先生です。\nテーマを選んで「시작！」ボタンで会話を始めましょう！",
     showJA: true,
     isSystem: true,
   }]);
-  const [input,        setInput]        = useState("");
-  const [loading,      setLoading]      = useState(false);
-  const [started,      setStarted]      = useState(false);
-  const [autoSpeak,    setAutoSpeak]    = useState(true);
-  const [isSpeaking,   setIsSpeaking]   = useState(false);
-  const [micState,     setMicState]     = useState("idle");
-  const [micLang,      setMicLang]      = useState("ko-KR");
-  const [retryInfo,    setRetryInfo]    = useState(null);
-  const [showChangelog,setShowChangelog]= useState(false);
+  const [input,         setInput]         = useState("");
+  const [loading,       setLoading]       = useState(false);
+  const [started,       setStarted]       = useState(false);
+  const [theme,         setTheme]         = useState(null);
+  const [autoSpeak,     setAutoSpeak]     = useState(true);
+  const [isSpeaking,    setIsSpeaking]    = useState(false);
+  const [micState,      setMicState]      = useState("idle");
+  const [micLang,       setMicLang]       = useState("ko-KR");
+  const [retryInfo,     setRetryInfo]     = useState(null);
+  const [showChangelog, setShowChangelog] = useState(false);
   const [isNewVersion] = useState(() =>
     localStorage.getItem("seen_version") !== CURRENT_VERSION
   );
@@ -109,7 +163,6 @@ export default function App() {
     r.onerror  = () => setMicState("idle");
     r.onend    = () => setMicState("idle");
     recRef.current = r;
-    // 音声リスト先読み
     window.speechSynthesis?.getVoices();
     if (window.speechSynthesis)
       window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
@@ -133,13 +186,15 @@ export default function App() {
   const deleteVocab = (i) => setVocab(prev => prev.filter((_, idx) => idx !== i));
 
   /* 送信 & リトライ */
-  const send = useCallback(async (text) => {
+  const send = useCallback(async (text, currentTheme) => {
     if (!text.trim() || loading) return;
     const userMsg = { role: "user", content: text };
     const history = [...messages.filter(m => !m.isSystem), userMsg];
     setMessages(prev => [...prev, userMsg]);
     setInput("");
     setLoading(true);
+
+    const systemPrompt = buildSystemPrompt(currentTheme || theme);
 
     let lastError = null;
     try {
@@ -156,7 +211,8 @@ export default function App() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              system: SYSTEM_PROMPT,
+              system: systemPrompt,
+              theme: (currentTheme || theme)?.id || null,
               messages: history.map(m => ({ role: m.role, content: m.content })),
             }),
           });
@@ -197,7 +253,12 @@ export default function App() {
       setRetryInfo(null);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [messages, loading, autoSpeak]);
+  }, [messages, loading, autoSpeak, theme]);
+
+  const handleStart = (selectedTheme) => {
+    setStarted(true);
+    send(`시작！（${selectedTheme.label}について話したいです）`, selectedTheme);
+  };
 
   const toggleMic = () => {
     if (micState === "unsupported" || !recRef.current) return;
@@ -206,9 +267,9 @@ export default function App() {
   };
 
   const quickReplies = [
-    { l: "네",       v: "네" },
-    { l: "아니요",   v: "아니요" },
-    { l: "모르겠어요", v: "모르겠어요" },
+    { l: "네",          v: "네" },
+    { l: "아니요",      v: "아니요" },
+    { l: "모르겠어요",  v: "모르겠어요" },
     { l: "다시 해주세요", v: "다시 해주세요" },
   ];
 
@@ -249,23 +310,43 @@ export default function App() {
 
           {/* ── アバターパネル（上部中央） ── */}
           <div style={c.avatarPanel}>
-            {/* 円形アバター：待機中→idle.gif、話し中→talking.gif */}
+            {/* 円形アバター：待機中→sona.png静止画、話し中→talking.gif */}
             <div style={c.avatarWrap}>
               <img
-                src={isSpeaking ? "/sona-talking.gif" : "/sona-idle.gif"}
+                src={isSpeaking ? "/sona-talking.gif" : "/sona.png"}
                 alt="소나 선생님"
                 style={c.avatarImg}
                 draggable={false}
               />
             </div>
-
             <div style={c.avatarName}>소나 선생님</div>
             <div style={c.avatarStatus}>
               {isSpeaking ? "🗣 話し中…"
                : loading  ? "💭 考え中…"
+               : theme    ? `${theme.emoji} ${theme.label}（${theme.ko}）`
                :             "✨ 待機中"}
             </div>
           </div>
+
+          {/* ── テーマ選択パネル（未選択時） ── */}
+          {!theme && (
+            <div style={c.themePanel}>
+              <div style={c.themePanelTitle}>🎯 今日は何について話しますか？</div>
+              <div style={c.themeGrid}>
+                {THEMES.map(t => (
+                  <button
+                    key={t.id}
+                    style={c.themeBtn}
+                    onClick={() => setTheme(t)}
+                  >
+                    <span style={{ fontSize: 26, lineHeight: 1 }}>{t.emoji}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>{t.label}</span>
+                    <span style={{ fontSize: 11, color: "#e85d6b", fontWeight: 600 }}>{t.ko}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── メッセージ ── */}
           <div style={c.msgs}>
@@ -279,22 +360,14 @@ export default function App() {
 
                 {m.role === "user" ? (
                   <div style={{ ...c.bubble, ...c.bubbleU }}>
-                    {m.content.split("\n").map((ln, j, a) =>
-                      <span key={j}>{ln}{j < a.length - 1 && <br/>}</span>
-                    )}
+                    {m.content}
                   </div>
                 ) : (
                   <div>
                     <div style={{ ...c.bubble, ...c.bubbleA }}>
-                      {m.content.split("\n").map((ln, j, a) =>
-                        <span key={j}>{ln}{j < a.length - 1 && <br/>}</span>
-                      )}
+                      {m.content}
                       {m.showJA && m.ja && (
-                        <div style={c.jaBlock}>
-                          {m.ja.split("\n").map((ln, j, a) =>
-                            <span key={j}>{ln}{j < a.length - 1 && <br/>}</span>
-                          )}
-                        </div>
+                        <div style={c.jaBlock}>{m.ja}</div>
                       )}
                     </div>
                     {!m.isSystem && (
@@ -352,11 +425,33 @@ export default function App() {
           {/* 入力エリア */}
           <div style={c.inputArea}>
             {!started ? (
-              <button style={c.startBtn}
-                      onClick={() => { setStarted(true); send("시작！（始める）"); }}>
-                시작！　会話を始める 🌸
-              </button>
+              theme ? (
+                /* テーマ選択済み → スタートボタン */
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+                  <div style={c.selectedThemeBar}>
+                    <span style={{ fontSize: 13, color: "#555" }}>
+                      {theme.emoji} <strong>{theme.label}</strong>（{theme.ko}）が選ばれました
+                    </span>
+                    <button
+                      style={c.changeThemeBtn}
+                      onClick={() => setTheme(null)}
+                    >変更</button>
+                  </div>
+                  <button
+                    style={c.startBtn}
+                    onClick={() => handleStart(theme)}
+                  >
+                    시작！　会話を始める 🌸
+                  </button>
+                </div>
+              ) : (
+                /* テーマ未選択 */
+                <div style={{ flex: 1, textAlign: "center", color: "#bbb", fontSize: 13 }}>
+                  上からテーマを選んでください
+                </div>
+              )
             ) : (
+              /* 会話中 → 通常入力 */
               <>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0 }}>
                   <button
@@ -462,12 +557,10 @@ export default function App() {
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        /* ── ドットローディング ── */
         @keyframes bounce {
           0%,80%,100% { transform: translateY(0); }
           40%          { transform: translateY(-6px); }
         }
-
       `}</style>
     </div>
   );
@@ -499,12 +592,11 @@ const c = {
   /* Layout */
   body:       { display: "flex", flex: 1, overflow: "hidden" },
   chatCol:    { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
-  /* Avatar panel（上部中央） */
+  /* Avatar panel */
   avatarPanel:{ display: "flex", flexDirection: "column", alignItems: "center",
                 gap: 5, padding: "12px 16px 8px",
                 background: "linear-gradient(to bottom,#fff0f2,#fff8f6)",
                 borderBottom: "1px solid #f0d9d9", flexShrink: 0 },
-  /* 円形ラッパー（overflow:hidden で画像＋オーバーレイを円にクリップ） */
   avatarWrap: { position: "relative", width: 100, height: 100,
                 borderRadius: "50%", overflow: "hidden",
                 border: "3px solid #e85d6b",
@@ -515,6 +607,23 @@ const c = {
                 userSelect: "none", WebkitUserDrag: "none" },
   avatarName: { fontSize: 13, fontWeight: 700, color: "#333" },
   avatarStatus:{ fontSize: 11, color: "#b08080" },
+  /* Theme selection panel */
+  themePanel: { padding: "12px 14px", background: "#fff8f6",
+                borderBottom: "1px solid #f0d9d9", flexShrink: 0 },
+  themePanelTitle: { fontSize: 13, fontWeight: 700, color: "#555",
+                     marginBottom: 10, textAlign: "center" },
+  themeGrid:  { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 },
+  themeBtn:   { display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                padding: "10px 6px", background: "#fff",
+                border: "1.5px solid #f0d9d9", borderRadius: 12, cursor: "pointer",
+                transition: "all .15s", fontFamily: "inherit" },
+  /* Selected theme bar */
+  selectedThemeBar: { display: "flex", alignItems: "center", justifyContent: "space-between",
+                      background: "#fff0f2", border: "1px solid #f0d9d9",
+                      borderRadius: 8, padding: "6px 10px" },
+  changeThemeBtn: { background: "none", border: "1px solid #ccc", color: "#888",
+                    borderRadius: 6, padding: "2px 8px", fontSize: 11,
+                    cursor: "pointer", fontFamily: "inherit" },
   /* Messages */
   msgs:       { flex: 1, overflowY: "auto", padding: "12px",
                 display: "flex", flexDirection: "column", gap: 10 },
@@ -523,12 +632,14 @@ const c = {
   rowUser:    { alignSelf: "flex-end" },
   who:        { display: "flex", alignItems: "center", gap: 5, marginBottom: 2 },
   name:       { fontSize: 11, color: "#aaa", fontWeight: 600 },
-  bubble:     { padding: "9px 12px", fontSize: 14, lineHeight: 1.75, borderRadius: 14,
-                boxShadow: "0 1px 3px rgba(0,0,0,.06)", whiteSpace: "pre-wrap", wordBreak: "break-word" },
+  /* bubble: lineHeight を 1.4 に下げ、whiteSpace: pre-wrap で改行を維持 */
+  bubble:     { padding: "9px 12px", fontSize: 14, lineHeight: 1.4, borderRadius: 14,
+                boxShadow: "0 1px 3px rgba(0,0,0,.06)",
+                whiteSpace: "pre-wrap", wordBreak: "break-word" },
   bubbleA:    { background: "#fff", border: "1px solid #f0d9d9", color: "#333" },
   bubbleU:    { background: "#e85d6b", color: "#fff" },
-  jaBlock:    { marginTop: 10, paddingTop: 10, borderTop: "1px dashed #f0d9d9",
-                color: "#888", fontSize: 13, lineHeight: 1.7 },
+  jaBlock:    { marginTop: 8, paddingTop: 8, borderTop: "1px dashed #f0d9d9",
+                color: "#888", fontSize: 13, lineHeight: 1.4 },
   msgActions: { display: "flex", gap: 5, marginTop: 4 },
   actionBtn:  { background: "#fff", border: "1px solid #eee", borderRadius: 14,
                 padding: "3px 10px", fontSize: 11, cursor: "pointer", color: "#bbb", fontFamily: "inherit" },
@@ -591,5 +702,5 @@ const c = {
   clLatestTag:{ background: "#e85d6b", color: "#fff", borderRadius: 8, padding: "1px 7px", fontSize: 10, fontWeight: 700 },
   clDate:     { fontSize: 11, color: "#aaa", marginLeft: "auto" },
   clList:     { listStyle: "none", display: "flex", flexDirection: "column", gap: 4 },
-  clItem:     { fontSize: 13, color: "#555", lineHeight: 1.6 },
+  clItem:     { fontSize: 13, color: "#555", lineHeight: 1.4 },
 };
