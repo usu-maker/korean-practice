@@ -509,7 +509,7 @@ export default function App() {
             <img src="/sona.png" alt="소나 선생님" style={c.headerAvatarImg} draggable={false}/>
           </button>
           <div>
-            <div style={c.hTitle}>한국어 연습</div>
+            <div style={c.hTitle}>소나톡</div>
             <div style={c.hSub}>ハングル検定5級 会話練習</div>
           </div>
         </div>
@@ -890,7 +890,7 @@ export default function App() {
           ))}
           <div style={c.openingCard}>
             <div style={{ fontSize: 44, lineHeight: 1, animation: "popIn 0.5s 0.3s both" }}>🇰🇷</div>
-            <div style={c.openingTitle}>한국어 연습</div>
+            <div style={c.openingTitle}>소나톡</div>
             <div style={c.openingSubtitle}>ハングル検定5級 会話練習</div>
             <div style={c.openingAvatarWrap}>
               <img src="/sona.png" alt="소나 선생님" style={c.openingAvatarImg} draggable={false}/>
@@ -1034,7 +1034,7 @@ export default function App() {
         <div style={c.overlay} onClick={() => setShowInfoModal(false)}>
           <div style={c.modal} onClick={e => e.stopPropagation()}>
             <div style={c.modalHeader}>
-              <span style={{ fontSize: 15, fontWeight: 700 }}>ℹ️ 한국어 연습 について</span>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>ℹ️ 소나톡 について</span>
               <button style={c.closeBtn} onClick={() => setShowInfoModal(false)}>✕</button>
             </div>
             <div style={{ overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14, maxHeight: "70vh" }}>
@@ -1043,7 +1043,7 @@ export default function App() {
               <div style={c.infoSection}>
                 <div style={c.infoSectionTitle}>📱 このアプリは？</div>
                 <p style={c.infoText}>
-                  AI技術を活用した韓国語会話練習アプリです。ハングル検定5級合格を目指す初心者向けに設計されています。
+                  소나톡（ソナトク）は、AI技術を活用した韓国語会話練習アプリです。ハングル検定5級合格を目指す初心者向けに設計されています。
                 </p>
               </div>
 
