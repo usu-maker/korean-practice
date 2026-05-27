@@ -1,6 +1,16 @@
-export const CURRENT_VERSION = "2.5.0";
+export const CURRENT_VERSION = "2.6.0";
 
 export const CHANGELOG = [
+  {
+    version: "2.6.0",
+    date: "2026/05/28",
+    changes: [
+      "🔤 単語タップ修正：全ハングル文字を自動検出（[가-힣]+）してspan化",
+      "📄 日本語訳修正：空行があっても全文表示（whiteSpace: pre-wrap対応）",
+      "🔍 未登録単語タップ時に「翻訳を読み込み中...」を表示しGeminiで翻訳取得",
+      "➕ 翻訳取得後に単語帳への追加ボタンが有効になる",
+    ],
+  },
   {
     version: "2.5.0",
     date: "2026/05/27",

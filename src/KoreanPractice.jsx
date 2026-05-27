@@ -99,21 +99,16 @@ function buildSystemPrompt(theme) {
 }
 
 /* ─── 韓国語テキスト（単語タップ対応）コンポーネント ─── */
+/* 問題1修正: [가-힣]+パターンで全ハングル文字を自動検出しspan化 */
+/* 問題2修正: 全行を処理し空行(\n\n)があっても全文表示 */
 function KoreanText({ text, words, onWordClick }) {
-  if (!words || words.length === 0) return <>{text}</>;
-  const validWords = words.filter(w => w.word && w.meaning !== undefined);
-  if (validWords.length === 0) return <>{text}</>;
-
-  const escaped = validWords.map(w => w.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const regex = new RegExp(`(${escaped.join('|')})`, 'g');
-  const parts = text.split(regex);
-
+  const parts = text.split(/([가-힣]+)/g);
   return (
     <>
       {parts.map((part, i) => {
         if (!part) return null;
-        const wordData = validWords.find(w => w.word === part);
-        if (wordData) {
+        if (/[가-힣]/.test(part)) {
+          const wordData = (words || []).find(w => w.word === part);
           return (
             <span
               key={i}
@@ -128,14 +123,21 @@ function KoreanText({ text, words, onWordClick }) {
               onClick={e => {
                 e.stopPropagation();
                 const rect = e.currentTarget.getBoundingClientRect();
-                onWordClick({ ...wordData, x: rect.left, y: rect.bottom });
+                onWordClick({
+                  word: part,
+                  reading: wordData?.reading ?? null,
+                  meaning: wordData?.meaning ?? null,
+                  x: rect.left,
+                  y: rect.bottom,
+                  needsTranslation: !wordData,
+                });
               }}
             >
               {part}
             </span>
           );
         }
-        return <span key={i}>{part}</span>;
+        return <span key={i} style={{ whiteSpace: 'pre-wrap' }}>{part}</span>;
       })}
     </>
   );
@@ -499,6 +501,29 @@ export default function App() {
     });
     setWordPopup(null);
   }, [checkAndUnlock]);
+
+  /* 問題3修正: 未翻訳単語をGeminiで翻訳取得 */
+  const fetchWordTranslation = useCallback(async (word) => {
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ word }),
+      });
+      const data = await res.json();
+      setWordPopup(prev =>
+        prev && prev.word === word
+          ? { ...prev, reading: data.reading || '', meaning: data.meaning || '翻訳を取得できませんでした', needsTranslation: false }
+          : prev
+      );
+    } catch {
+      setWordPopup(prev =>
+        prev && prev.word === word
+          ? { ...prev, meaning: '翻訳を取得できませんでした', needsTranslation: false }
+          : prev
+      );
+    }
+  }, []);
 
   const copyMistakes = useCallback(() => {
     if (mistakes.length === 0) return;
@@ -945,7 +970,10 @@ export default function App() {
                       <KoreanText
                         text={m.content}
                         words={m.words || []}
-                        onWordClick={(w) => setWordPopup(w)}
+                        onWordClick={(w) => {
+                          setWordPopup(w);
+                          if (w.needsTranslation) fetchWordTranslation(w.word);
+                        }}
                       />
                       {m.showJA && m.ja && (
                         <div style={c.jaBlock}>{m.ja}</div>
@@ -1801,31 +1829,34 @@ export default function App() {
             {/* 読み方 */}
             <div style={{ fontSize: 12, color: '#b08080', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
               <span style={{ fontSize: 10, background: '#fce4e8', color: '#e85d6b', borderRadius: 6, padding: '1px 5px', fontWeight: 700 }}>読み</span>
-              {wordPopup.reading}
+              {wordPopup.needsTranslation ? <span style={{ color: '#ccc', fontStyle: 'italic' }}>読み込み中...</span> : (wordPopup.reading || '—')}
             </div>
             {/* 意味 */}
             <div style={{ fontSize: 14, fontWeight: 700, color: '#444', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
               <span style={{ fontSize: 10, background: '#f0e8ff', color: '#7b5ea7', borderRadius: 6, padding: '1px 5px', fontWeight: 700 }}>意味</span>
-              {wordPopup.meaning}
+              {wordPopup.needsTranslation ? <span style={{ color: '#ccc', fontStyle: 'italic', fontWeight: 400 }}>翻訳を読み込み中...</span> : (wordPopup.meaning || '—')}
             </div>
 
             {/* 単語帳追加ボタン */}
             <button
               style={{
                 width: '100%',
-                background: alreadyAdded
-                  ? 'linear-gradient(90deg, #c8e6c9, #a5d6a7)'
-                  : 'linear-gradient(90deg, #e85d6b, #ff8c98)',
-                color: '#fff', border: 'none', borderRadius: 10,
+                background: wordPopup.needsTranslation
+                  ? 'linear-gradient(90deg, #ddd, #eee)'
+                  : alreadyAdded
+                    ? 'linear-gradient(90deg, #c8e6c9, #a5d6a7)'
+                    : 'linear-gradient(90deg, #e85d6b, #ff8c98)',
+                color: wordPopup.needsTranslation ? '#aaa' : '#fff',
+                border: 'none', borderRadius: 10,
                 padding: '8px 0', fontSize: 12, fontWeight: 700,
-                cursor: alreadyAdded ? 'default' : 'pointer',
-                boxShadow: alreadyAdded ? 'none' : '0 2px 8px rgba(232,93,107,.3)',
+                cursor: (alreadyAdded || wordPopup.needsTranslation) ? 'default' : 'pointer',
+                boxShadow: (alreadyAdded || wordPopup.needsTranslation) ? 'none' : '0 2px 8px rgba(232,93,107,.3)',
                 transition: 'all .2s',
                 fontFamily: 'inherit',
               }}
-              onClick={() => !alreadyAdded && addWordFromPopup(wordPopup)}
+              onClick={() => !alreadyAdded && !wordPopup.needsTranslation && addWordFromPopup(wordPopup)}
             >
-              {alreadyAdded ? '✅ 単語帳に登録済み' : '＋ 単語帳に追加'}
+              {wordPopup.needsTranslation ? '⏳ 読み込み中...' : alreadyAdded ? '✅ 単語帳に登録済み' : '＋ 単語帳に追加'}
             </button>
           </div>
         );
@@ -1967,7 +1998,7 @@ const c = {
   bubbleA:    { background: "#fff", border: "1px solid #f0d9d9", color: "#333" },
   bubbleU:    { background: "#e85d6b", color: "#fff" },
   jaBlock:    { marginTop: 8, paddingTop: 8, borderTop: "1px dashed #f0d9d9",
-                color: "#888", fontSize: 13, lineHeight: 1.4 },
+                color: "#888", fontSize: 13, lineHeight: 1.4, whiteSpace: 'pre-wrap' },
   msgActions: { display: "flex", gap: 5, marginTop: 4 },
   actionBtn:  { background: "#fff", border: "1px solid #eee", borderRadius: 14,
                 padding: "3px 10px", fontSize: 11, cursor: "pointer", color: "#bbb", fontFamily: "inherit" },
