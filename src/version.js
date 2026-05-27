@@ -1,6 +1,16 @@
-export const CURRENT_VERSION = "2.6.0";
+export const CURRENT_VERSION = "2.7.0";
 
 export const CHANGELOG = [
+  {
+    version: "2.7.0",
+    date: "2026/05/28",
+    changes: [
+      "🖼 会話中に関連画像表示機能追加（料理・旅行・スポーツ・K-pop・ゲーム・アニメ）",
+      "🔍 画像タップで拡大ライトボックス表示",
+      "🤖 ソナ先生が話題に合わせて自然に画像を見せるようシステムプロンプト更新",
+      "📁 public/imagesに26枚の画像を追加（Unsplash・公式サイト）",
+    ],
+  },
   {
     version: "2.6.0",
     date: "2026/05/28",
