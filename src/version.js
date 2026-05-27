@@ -1,6 +1,17 @@
-export const CURRENT_VERSION = "1.7.0";
+export const CURRENT_VERSION = "1.8.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.8.0",
+    date: "2026/05/27",
+    changes: [
+      "🔥 連続練習ストリーク機能追加（Duolingo風）",
+      "📅 学習履歴タブ追加（サイドバーに「記録」タブ）",
+      "🗓 過去7日間の週間カレンダー表示",
+      "🇯🇵 日本語訳ボタンの翻訳を全文表示に修正（省略なし）",
+      "⬆ AI応答トークン上限を2048に拡大（長文翻訳が途切れにくく）",
+    ],
+  },
   {
     version: "1.7.0",
     date: "2026/05/25",
