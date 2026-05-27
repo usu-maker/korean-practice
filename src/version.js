@@ -1,6 +1,15 @@
-export const CURRENT_VERSION = "1.8.0";
+export const CURRENT_VERSION = "1.9.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.9.0",
+    date: "2026/05/27",
+    changes: [
+      "✏️ 文法・自然さチェック機能追加（ソナ先生が入力ミスを優しく指摘）",
+      "📒 まちがいノート機能追加（ミスを自動記録・コピー可能）",
+      "📐 サイドバーを2分割レイアウトに変更（単語メモ＋まちがいノートを縦並び・各スクロール対応）",
+    ],
+  },
   {
     version: "1.8.0",
     date: "2026/05/27",
