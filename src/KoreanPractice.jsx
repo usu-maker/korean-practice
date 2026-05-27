@@ -98,6 +98,49 @@ function buildSystemPrompt(theme) {
   return BASE_SYSTEM + (THEME_SYSTEM_EXTRAS[theme.id] || "");
 }
 
+/* ─── 韓国語テキスト（単語タップ対応）コンポーネント ─── */
+function KoreanText({ text, words, onWordClick }) {
+  if (!words || words.length === 0) return <>{text}</>;
+  const validWords = words.filter(w => w.word && w.meaning !== undefined);
+  if (validWords.length === 0) return <>{text}</>;
+
+  const escaped = validWords.map(w => w.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const regex = new RegExp(`(${escaped.join('|')})`, 'g');
+  const parts = text.split(regex);
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (!part) return null;
+        const wordData = validWords.find(w => w.word === part);
+        if (wordData) {
+          return (
+            <span
+              key={i}
+              style={{
+                borderBottom: '2px dotted #e85d6b',
+                color: '#c94455',
+                cursor: 'pointer',
+                borderRadius: 2,
+                padding: '0 1px',
+                display: 'inline',
+              }}
+              onClick={e => {
+                e.stopPropagation();
+                const rect = e.currentTarget.getBoundingClientRect();
+                onWordClick({ ...wordData, x: rect.left, y: rect.bottom });
+              }}
+            >
+              {part}
+            </span>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
 /* ─── テキスト処理 ─── */
 function extractJA(t) {
   const m = t.match(/\[JA\]([\s\S]*?)\[\/JA\]/);
@@ -106,7 +149,18 @@ function extractJA(t) {
 function extractKorean(t) {
   return t.replace(/\[JA\][\s\S]*?\[\/JA\]\n?/g, "")
            .replace(/\[VOCAB\][\s\S]*?\[\/VOCAB\]\n?/g, "")
+           .replace(/\[WORDS\][\s\S]*?\[\/WORDS\]\n?/g, "")
            .trim();
+}
+function extractWordData(t) {
+  const m = t.match(/\[WORDS\]([\s\S]*?)\[\/WORDS\]/);
+  if (!m) return [];
+  try {
+    const raw = m[1].trim();
+    const json = JSON.parse(raw);
+    if (!Array.isArray(json.words)) return [];
+    return json.words.filter(w => w && w.word && w.reading !== undefined && w.meaning !== undefined);
+  } catch { return []; }
 }
 function extractVocabSuggestions(t) {
   const m = t.match(/\[VOCAB\]([\s\S]*?)\[\/VOCAB\]/);
@@ -318,6 +372,9 @@ export default function App() {
   /* ② AI単語提案 */
   const [vocabSugs, setVocabSugs] = useState([]); // [{ word, meaning }]
 
+  /* 単語タップポップアップ */
+  const [wordPopup, setWordPopup] = useState(null); // null | { word, reading, meaning, x, y }
+
   /* ③ 今日のミッション */
   const todayMission = useMemo(() => {
     const dy = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 864e5);
@@ -429,6 +486,20 @@ export default function App() {
   };
   const deleteVocab = (i) => setVocab(prev => prev.filter((_, idx) => idx !== i));
 
+  /* 単語ポップアップから単語帳に追加 */
+  const addWordFromPopup = useCallback((wordData) => {
+    setVocab(prev => {
+      if (prev.some(v => v.word === wordData.word)) {
+        setWordPopup(null);
+        return prev;
+      }
+      const updated = [...prev, { word: wordData.word, meaning: wordData.meaning }];
+      checkAndUnlock({ vocabCount: updated.length });
+      return updated;
+    });
+    setWordPopup(null);
+  }, [checkAndUnlock]);
+
   const copyMistakes = useCallback(() => {
     if (mistakes.length === 0) return;
     const text = "📒 まちがいノート\n\n" +
@@ -523,7 +594,8 @@ export default function App() {
 
           const ja      = extractJA(data.text);
           const korean  = extractKorean(data.text);
-          setMessages(prev => [...prev, { role: "assistant", content: korean, ja, showJA: false }]);
+          const words   = extractWordData(data.text);
+          setMessages(prev => [...prev, { role: "assistant", content: korean, ja, showJA: false, words }]);
 
           /* ② AI単語提案を更新 */
           const sugs = extractVocabSuggestions(data.text);
@@ -650,7 +722,8 @@ export default function App() {
   ];
 
   return (
-    <div style={{ ...c.app, paddingBottom: isMobile ? 56 : 0 }}>
+    <div style={{ ...c.app, paddingBottom: isMobile ? 56 : 0 }}
+         onClick={() => wordPopup && setWordPopup(null)}>
 
       {/* ══ ヘッダー ══ */}
       <div style={c.header}>
@@ -869,7 +942,11 @@ export default function App() {
                 ) : (
                   <div>
                     <div style={{ ...c.bubble, ...c.bubbleA }}>
-                      {m.content}
+                      <KoreanText
+                        text={m.content}
+                        words={m.words || []}
+                        onWordClick={(w) => setWordPopup(w)}
+                      />
                       {m.showJA && m.ja && (
                         <div style={c.jaBlock}>{m.ja}</div>
                       )}
@@ -1681,6 +1758,78 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* ══ 単語タップ ポップアップ ══ */}
+      {wordPopup && (() => {
+        const POPUP_W = 220;
+        const POPUP_H = 148;
+        const left = Math.max(8, Math.min(wordPopup.x, window.innerWidth - POPUP_W - 8));
+        const top  = wordPopup.y + POPUP_H > window.innerHeight - 8
+          ? wordPopup.y - POPUP_H - 8
+          : wordPopup.y + 8;
+        const alreadyAdded = vocab.some(v => v.word === wordPopup.word);
+        return (
+          <div
+            style={{
+              position: 'fixed', left, top, zIndex: 3000,
+              background: 'linear-gradient(140deg, #fff5f7 0%, #ffffff 100%)',
+              border: '1.5px solid #f5c0c8',
+              borderRadius: 16,
+              boxShadow: '0 6px 28px rgba(232,93,107,.25), 0 2px 8px rgba(0,0,0,.08)',
+              padding: '14px 14px 12px',
+              width: POPUP_W,
+              userSelect: 'none',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 閉じるボタン */}
+            <button
+              style={{
+                position: 'absolute', top: 8, right: 8,
+                background: '#f5c0c8', border: 'none', color: '#e85d6b',
+                borderRadius: '50%', width: 22, height: 22, fontSize: 11,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 700, lineHeight: 1,
+              }}
+              onClick={() => setWordPopup(null)}
+            >✕</button>
+
+            {/* 単語 */}
+            <div style={{ fontSize: 22, fontWeight: 900, color: '#e85d6b', lineHeight: 1.2, marginBottom: 3, paddingRight: 24 }}>
+              {wordPopup.word}
+            </div>
+            {/* 読み方 */}
+            <div style={{ fontSize: 12, color: '#b08080', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 10, background: '#fce4e8', color: '#e85d6b', borderRadius: 6, padding: '1px 5px', fontWeight: 700 }}>読み</span>
+              {wordPopup.reading}
+            </div>
+            {/* 意味 */}
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#444', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 10, background: '#f0e8ff', color: '#7b5ea7', borderRadius: 6, padding: '1px 5px', fontWeight: 700 }}>意味</span>
+              {wordPopup.meaning}
+            </div>
+
+            {/* 単語帳追加ボタン */}
+            <button
+              style={{
+                width: '100%',
+                background: alreadyAdded
+                  ? 'linear-gradient(90deg, #c8e6c9, #a5d6a7)'
+                  : 'linear-gradient(90deg, #e85d6b, #ff8c98)',
+                color: '#fff', border: 'none', borderRadius: 10,
+                padding: '8px 0', fontSize: 12, fontWeight: 700,
+                cursor: alreadyAdded ? 'default' : 'pointer',
+                boxShadow: alreadyAdded ? 'none' : '0 2px 8px rgba(232,93,107,.3)',
+                transition: 'all .2s',
+                fontFamily: 'inherit',
+              }}
+              onClick={() => !alreadyAdded && addWordFromPopup(wordPopup)}
+            >
+              {alreadyAdded ? '✅ 単語帳に登録済み' : '＋ 単語帳に追加'}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* ══ CSS アニメーション ══ */}
       <style>{`

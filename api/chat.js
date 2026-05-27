@@ -107,6 +107,10 @@ export default async function handler(req, res) {
   /* ── システムプロンプト構築（Tavily 複数クエリ結果を追記） ── */
   let systemPrompt = system || '';
 
+  /* ── 重要単語JSON出力の指示を必ず追記 ── */
+  systemPrompt += `\n\n## 返答内の重要単語リスト（必須・省略禁止）\n[JA][/JA]ブロックの直後に、今回の韓国語返答文中に登場した重要な単語を以下のJSON形式で出力すること。必ず含めること（単語がなくても空配列で出力）。\n[WORDS]\n{"words":[{"word":"한국어","reading":"かんこくご","meaning":"韓国語"},{"word":"공부","reading":"べんきょう","meaning":"勉強"}]}\n[/WORDS]\nルール：\n- 最大5単語まで\n- 実際に韓国語返答文中に登場した単語のみ選ぶ\n- readingは必ずひらがなで記載（カタカナ・ローマ字不可）\n- 単語がない場合も {"words":[]} と出力すること`;
+
+
   if (theme && THEME_QUERIES[theme]) {
     const isFirstMessage = messages.length <= 1;
     if (isFirstMessage) {
