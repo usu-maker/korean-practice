@@ -1,6 +1,16 @@
-export const CURRENT_VERSION = "2.0.0";
+export const CURRENT_VERSION = "2.1.0";
 
 export const CHANGELOG = [
+  {
+    version: "2.1.0",
+    date: "2026/05/27",
+    changes: [
+      "🔍 Tavily検索をテーマごと複数クエリ対応（最大3件並列実行）",
+      "📰 検索結果を500文字に切り詰め・改行区切りで結合しプロンプトへ",
+      "🎯 システムプロンプトをオタク・ファン目線の熱量高いトーンに改善",
+      "⚡ 検索タイムアウト5秒・失敗時は結果なしで安全続行",
+    ],
+  },
   {
     version: "2.0.0",
     date: "2026/05/27",

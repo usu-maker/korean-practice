@@ -19,7 +19,6 @@ async function tavilySearch(query) {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    // answer が最も簡潔。なければ results の snippet を結合
     if (data.answer) return data.answer;
     if (data.results && data.results.length > 0) {
       return data.results
@@ -34,14 +33,60 @@ async function tavilySearch(query) {
   }
 }
 
-/* ─── テーマ別 Tavily 検索クエリ ─── */
+/* ─── 検索結果を指定文字数に切り詰め ─── */
+function truncate(text, maxLen = 500) {
+  if (!text || text.length <= maxLen) return text;
+  return text.slice(0, maxLen) + '…';
+}
+
+/* ─── タイムアウト付き Promise ─── */
+function withTimeout(promise, ms = 5000) {
+  return Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
+/* ─── テーマ別 Tavily 検索クエリ（複数） ─── */
 const THEME_QUERIES = {
-  game:    '韓国 人気ゲーム 話題 2025 最新',
-  anime:   '韓国 日本アニメ 人気 おすすめ 2025',
-  sports:  '韓国 スポーツ 最新ニュース 2025',
-  kpop:    'K-pop 人気グループ 最新曲 2025',
-  cooking: '韓国料理 人気メニュー トレンド 2025',
-  travel:  '韓国旅行 人気観光地 おすすめ 2025',
+  game: [
+    'ブルーアーカイブ 最新情報 2026',
+    '人気ゲーム ランキング 最新 2026',
+    'ステラーブレイド 最新',
+  ],
+  anime: [
+    '2026年 春アニメ 話題 ランキング',
+    'アニメ 今週 最終回 感想',
+    '人気アニメ キャラクター 最新',
+  ],
+  sports: [
+    'MLB 試合結果 最新',
+    '大谷翔平 最新ニュース',
+    'プレミアリーグ 順位 最新',
+  ],
+  kpop: [
+    'K-pop 新曲 2026 話題',
+    'BTS BLACKPINK 最新情報 2026',
+    '韓国アイドル ランキング 最新',
+  ],
+  cooking: [
+    '韓国料理 人気 トレンド 2026',
+    '韓国グルメ 最新 話題',
+  ],
+  travel: [
+    '韓国旅行 おすすめスポット 2026',
+    'ソウル 観光 最新情報',
+  ],
+};
+
+/* ─── テーマ表示名 ─── */
+const THEME_LABELS = {
+  game:    'ゲーム',
+  anime:   'アニメ',
+  sports:  'スポーツ',
+  kpop:    'K-pop',
+  cooking: '料理',
+  travel:  '旅行',
 };
 
 export default async function handler(req, res) {
@@ -59,16 +104,44 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'メッセージの形式が正しくありません' });
   }
 
-  /* ── システムプロンプト構築（Tavily 検索結果を追記） ── */
+  /* ── システムプロンプト構築（Tavily 複数クエリ結果を追記） ── */
   let systemPrompt = system || '';
 
   if (theme && THEME_QUERIES[theme]) {
-    // 初回メッセージのみ検索（messages.length === 1 の場合）
     const isFirstMessage = messages.length <= 1;
     if (isFirstMessage) {
-      const searchResult = await tavilySearch(THEME_QUERIES[theme]);
-      if (searchResult) {
-        systemPrompt += `\n\n## 最新情報（テーマ：${theme}）\n以下はテーマに関する最新情報です。会話の中で自然に取り入れてください：\n${searchResult}`;
+      // 複数クエリを並列実行（各5秒タイムアウト）
+      const queries = THEME_QUERIES[theme];
+      const results = await Promise.all(
+        queries.map(q => withTimeout(tavilySearch(q), 5000))
+      );
+
+      // nullを除外・500文字に切り詰め・改行区切りで結合
+      const combined = results
+        .filter(Boolean)
+        .map((r, i) => `【検索${i + 1}】${truncate(r, 500)}`)
+        .join('\n---\n');
+
+      if (combined) {
+        const label = THEME_LABELS[theme] || theme;
+        systemPrompt += `
+
+## テーマ「${label}」の最新情報
+あなたはテーマ「${label}」が大好きなソナ先生です。
+以下の最新情報を自然に会話に織り交ぜてください：
+
+${combined}
+
+## 会話ルール（テーマ追加分）
+- 最新情報を知っている友人として自然に話す
+- 具体的な作品名・キャラ名・選手名・曲名を積極的に使う
+- アニメ：今期の話題作のキャラ・展開・感想に言及
+- スポーツ：実際の試合結果・選手名・順位を使う
+- K-pop：最新曲・アルバム・メンバー名を具体的に使う
+- ゲーム：キャラ・イベント・アップデート情報を使う
+- 料理：最新トレンドのメニュー・食材を使う
+- 旅行：具体的なスポット・グルメ・イベント情報を使う
+- オタク・ファン目線で熱量高く話す`;
       }
     }
   }
