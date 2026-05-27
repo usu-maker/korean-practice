@@ -1,6 +1,15 @@
-export const CURRENT_VERSION = "2.1.0";
+export const CURRENT_VERSION = "2.2.0";
 
 export const CHANGELOG = [
+  {
+    version: "2.2.0",
+    date: "2026/05/27",
+    changes: [
+      "🌸 ソナ先生プロフィール画面追加（ヘッダーアバター・チャットアバターをクリックで表示）",
+      "ℹ️ アプリ説明モーダル追加（使用技術・できること・注意事項）",
+      "🎨 ヘッダーを円形アバターボタンに変更（クリックでプロフィールへ）",
+    ],
+  },
   {
     version: "2.1.0",
     date: "2026/05/27",

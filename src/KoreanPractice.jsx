@@ -232,6 +232,10 @@ export default function App() {
   const [showAchievModal, setShowAchievModal] = useState(false);
   const achievQueueRef = useRef([]);
 
+  /* プロフィール・アプリ説明モーダル */
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showInfoModal,    setShowInfoModal]    = useState(false);
+
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
   const recRef    = useRef(null);
@@ -499,7 +503,11 @@ export default function App() {
       {/* ══ ヘッダー ══ */}
       <div style={c.header}>
         <div style={c.hLeft}>
-          <span style={{ fontSize: 24 }}>🇰🇷</span>
+          {/* ソナ先生アバターボタン → プロフィール */}
+          <button style={c.headerAvatarBtn} onClick={() => setShowProfileModal(true)}
+                  title="소나 선생님のプロフィール">
+            <img src="/sona.png" alt="소나 선생님" style={c.headerAvatarImg} draggable={false}/>
+          </button>
           <div>
             <div style={c.hTitle}>한국어 연습</div>
             <div style={c.hSub}>ハングル検定5級 会話練習</div>
@@ -518,6 +526,9 @@ export default function App() {
             <span style={{ ...c.achievCountBadge }}>
               {unlockedAchievs.length}/{ACHIEVEMENTS.length}
             </span>
+          </button>
+          <button style={c.iconBtn} onClick={() => setShowInfoModal(true)} title="アプリについて">
+            ℹ️
           </button>
           {/* ストリーク表示 */}
           <div
@@ -547,7 +558,8 @@ export default function App() {
           {/* ── アバターパネル（上部中央） ── */}
           <div style={c.avatarPanel}>
             {/* 円形アバター：待機中→sona.png静止画、話し中→talking.gif */}
-            <div style={c.avatarWrap}>
+            <div style={{ ...c.avatarWrap, cursor: "pointer" }}
+                 onClick={() => setShowProfileModal(true)} title="프로필 보기">
               <img
                 src={isSpeaking ? "/sona-talking.gif" : "/sona.png"}
                 alt="소나 선생님"
@@ -555,7 +567,8 @@ export default function App() {
                 draggable={false}
               />
             </div>
-            <div style={c.avatarName}>소나 선생님</div>
+            <div style={{ ...c.avatarName, cursor: "pointer" }}
+                 onClick={() => setShowProfileModal(true)}>소나 선생님</div>
             <div style={c.avatarStatus}>
               {isSpeaking ? "🗣 話し中…"
                : loading  ? "💭 考え中…"
@@ -952,6 +965,143 @@ export default function App() {
         </div>
       )}
 
+      {/* ══ プロフィールモーダル ══ */}
+      {showProfileModal && (
+        <div style={c.overlay} onClick={() => setShowProfileModal(false)}>
+          <div style={{ ...c.modal, width: "min(92vw,360px)" }} onClick={e => e.stopPropagation()}>
+            {/* ヘッダー：アバター大きく */}
+            <div style={c.profileHeader}>
+              <button style={c.profileCloseBtn} onClick={() => setShowProfileModal(false)}>✕</button>
+              <div style={c.profileAvatarWrap}>
+                <img src="/sona.png" alt="소나 선생님" style={c.profileAvatarImg} draggable={false}/>
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: "#fff", marginTop: 6 }}>소나 선생님</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,.75)", marginTop: 2 }}>ソナ先生</div>
+              <div style={c.profileTagRow}>
+                <span style={c.profileTag}>🌸 26歳</span>
+                <span style={c.profileTag}>📍 ソウル・弘大</span>
+                <span style={c.profileTag}>💼 韓国語講師</span>
+              </div>
+            </div>
+
+            {/* ボディ */}
+            <div style={c.profileBody}>
+              {/* 好きなこと */}
+              <div style={c.profileCard}>
+                <div style={c.profileCardTitle}>💕 好きなこと</div>
+                {[
+                  { e: "🎮", l: "ゲーム",     v: "ブルーアーカイブ（推しはアスナ）、原神" },
+                  { e: "🎌", l: "アニメ",     v: "鬼滅の刃、呪術廻戦、進撃の巨人" },
+                  { e: "⚾", l: "スポーツ",   v: "MLB観戦（大谷翔平の大ファン！）、Kリーグ、バスケ" },
+                  { e: "🎵", l: "音楽",       v: "K-pop全般（BTS・BLACKPINK・NewJeans）" },
+                  { e: "🍜", l: "食べ物",     v: "チーズタッカルビ、マラタン、抹茶スイーツ" },
+                  { e: "✈️", l: "旅行",       v: "日本大好き！京都・大阪によく行きます" },
+                ].map(({ e, l, v }) => (
+                  <div key={l} style={c.profileLikeRow}>
+                    <span style={{ fontSize: 16, flexShrink: 0, width: 22 }}>{e}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#e85d6b" }}>{l}：</span>
+                      <span style={{ fontSize: 11, color: "#444" }}>{v}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 口癖 */}
+              <div style={{ ...c.profileCard, background: "#fff0f2" }}>
+                <div style={c.profileCardTitle}>💬 口癖</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+                  {["대박！（テバク！）", "진짜요？（チンチャヨ？）"].map(p => (
+                    <span key={p} style={c.profileBubble}>{p}</span>
+                  ))}
+                </div>
+              </div>
+
+              {/* 一言 */}
+              <div style={c.profileQuote}>
+                <div style={{ fontSize: 22, marginBottom: 6 }}>🌸</div>
+                <div style={{ fontSize: 13, color: "#666", lineHeight: 1.75 }}>
+                  「韓国語は楽しく話すのが一番！<br/>一緒に上手になりましょう 😊」
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ アプリ説明モーダル ══ */}
+      {showInfoModal && (
+        <div style={c.overlay} onClick={() => setShowInfoModal(false)}>
+          <div style={c.modal} onClick={e => e.stopPropagation()}>
+            <div style={c.modalHeader}>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>ℹ️ 한국어 연습 について</span>
+              <button style={c.closeBtn} onClick={() => setShowInfoModal(false)}>✕</button>
+            </div>
+            <div style={{ overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14, maxHeight: "70vh" }}>
+
+              {/* このアプリは？ */}
+              <div style={c.infoSection}>
+                <div style={c.infoSectionTitle}>📱 このアプリは？</div>
+                <p style={c.infoText}>
+                  AI技術を活用した韓国語会話練習アプリです。ハングル検定5級合格を目指す初心者向けに設計されています。
+                </p>
+              </div>
+
+              {/* 使用技術 */}
+              <div style={c.infoSection}>
+                <div style={c.infoSectionTitle}>🛠 使用しているAI・技術</div>
+                {[
+                  ["会話AI",     "Google Gemini API"],
+                  ["最新情報検索", "Tavily Search API"],
+                  ["音声読み上げ", "Web Speech API（ブラウザ標準）"],
+                  ["音声入力",   "Web Speech API（Chrome推奨）"],
+                  ["ホスティング", "Vercel"],
+                ].map(([k, v]) => (
+                  <div key={k} style={c.infoRow}>
+                    <span style={c.infoKey}>・{k}：</span>
+                    <span style={c.infoVal}>{v}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* できること */}
+              <div style={c.infoSection}>
+                <div style={c.infoSectionTitle}>✅ できること</div>
+                {[
+                  "AIソナ先生との韓国語会話練習",
+                  "テーマ別会話（ゲーム・アニメ・スポーツ等）",
+                  "最新情報を元にした自然な会話",
+                  "文法ミスの自動チェック・解説",
+                  "単語メモ・まちがいノートの自動記録",
+                  "音声入力・読み上げ対応",
+                ].map(f => (
+                  <div key={f} style={c.infoFeature}>✅ {f}</div>
+                ))}
+              </div>
+
+              {/* 注意事項 */}
+              <div style={c.infoWarnSection}>
+                <div style={{ ...c.infoSectionTitle, color: "#92400e" }}>⚠️ 注意事項</div>
+                {[
+                  "本アプリはAIが生成する会話を使用しています",
+                  "AIの回答は100%正確ではない場合があります",
+                  "学習の参考としてご利用ください",
+                  "入力した会話内容はAI処理のために送信されます",
+                  "個人情報は入力しないようにご注意ください",
+                ].map(n => (
+                  <div key={n} style={{ ...c.infoRow, color: "#78350f" }}>・{n}</div>
+                ))}
+              </div>
+
+              {/* フッター */}
+              <div style={{ textAlign: "center", color: "#ccc", fontSize: 10, paddingBottom: 2 }}>
+                v{CURRENT_VERSION} · 開発：usu-maker
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ══ チェンジログモーダル ══ */}
       {showChangelog && (
         <div style={c.overlay} onClick={() => setShowChangelog(false)}>
@@ -1045,6 +1195,13 @@ const c = {
   hSub:       { fontSize: 10, opacity: 0.85 },
   iconBtn:    { background: "rgba(255,255,255,.2)", border: "none", borderRadius: 18,
                 padding: "3px 9px", fontSize: 15, cursor: "pointer", color: "#fff" },
+  /* ヘッダーアバターボタン */
+  headerAvatarBtn: {
+    width: 38, height: 38, borderRadius: "50%", border: "2px solid rgba(255,255,255,.7)",
+    overflow: "hidden", cursor: "pointer", padding: 0, background: "none", flexShrink: 0,
+    boxShadow: "0 2px 8px rgba(0,0,0,.2)", transition: "transform .15s",
+  },
+  headerAvatarImg: { width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block" },
   badge:      { background: "#fff", color: "#e85d6b", fontWeight: 700,
                 fontSize: 13, borderRadius: 16, padding: "3px 11px" },
   verBtn:     { position: "relative", background: "rgba(255,255,255,.15)",
@@ -1293,4 +1450,48 @@ const c = {
     border: "1.5px solid #e85d6b",
     pointerEvents: "none",
   },
+
+  /* ══ プロフィールモーダル ══ */
+  profileHeader: {
+    background: "linear-gradient(160deg, #ff7b8e 0%, #e85d6b 100%)",
+    padding: "22px 16px 18px",
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+    position: "relative", flexShrink: 0,
+  },
+  profileCloseBtn: {
+    position: "absolute", top: 10, right: 10,
+    background: "rgba(255,255,255,.2)", border: "none", color: "#fff",
+    borderRadius: "50%", width: 28, height: 28, fontSize: 13, cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center",
+  },
+  profileAvatarWrap: {
+    width: 86, height: 86, borderRadius: "50%", overflow: "hidden",
+    border: "3px solid rgba(255,255,255,.8)",
+    boxShadow: "0 4px 18px rgba(0,0,0,.25)", flexShrink: 0,
+  },
+  profileAvatarImg: { width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" },
+  profileTagRow:  { display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "center", marginTop: 8 },
+  profileTag:     { background: "rgba(255,255,255,.22)", color: "#fff", borderRadius: 20,
+                    padding: "3px 10px", fontSize: 10, fontWeight: 600 },
+  profileBody:    { overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column",
+                    gap: 11, maxHeight: "55vh" },
+  profileCard:    { background: "#fff", border: "1px solid #f0d9d9", borderRadius: 12, padding: "11px 13px" },
+  profileCardTitle:{ fontSize: 11, fontWeight: 700, color: "#e85d6b", marginBottom: 8 },
+  profileLikeRow: { display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 7, lineHeight: 1.4 },
+  profileBubble:  { background: "#e85d6b", color: "#fff", borderRadius: 20, padding: "4px 12px",
+                    fontSize: 12, fontWeight: 700 },
+  profileQuote:   { background: "linear-gradient(135deg,#fff0f2,#fff8f6)", borderRadius: 12,
+                    padding: "14px 16px", border: "1px solid #f0d9d9",
+                    textAlign: "center", lineHeight: 1 },
+
+  /* ══ アプリ説明モーダル ══ */
+  infoSection:      { background: "#fdf6f0", border: "1px solid #f0d9d9", borderRadius: 11, padding: "11px 13px" },
+  infoWarnSection:  { background: "#fffbf0", border: "1px solid #fde68a", borderRadius: 11, padding: "11px 13px" },
+  infoSectionTitle: { fontSize: 12, fontWeight: 700, color: "#e85d6b", marginBottom: 8 },
+  infoText:         { fontSize: 12, color: "#555", lineHeight: 1.7, margin: 0 },
+  infoRow:          { display: "flex", flexWrap: "wrap", gap: 2, fontSize: 11, color: "#555",
+                      lineHeight: 1.6, marginBottom: 2 },
+  infoKey:          { fontWeight: 700, color: "#888", flexShrink: 0 },
+  infoVal:          { color: "#444" },
+  infoFeature:      { fontSize: 12, color: "#444", lineHeight: 1.7 },
 };
