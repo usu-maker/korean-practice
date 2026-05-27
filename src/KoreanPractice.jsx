@@ -147,6 +147,36 @@ function saveStreakData(data) {
   localStorage.setItem("korean_streak", JSON.stringify(data));
 }
 
+/* ─── 実績システム ─── */
+const ACHIEVEMENTS = [
+  { id: "first_convo",  emoji: "🌱", name: "はじめの一歩",   desc: "初めて会話した",               cond: s => s.totalMessages >= 1 },
+  { id: "msg_10",       emoji: "💬", name: "おしゃべり上手",  desc: "10回メッセージを送った",         cond: s => s.totalMessages >= 10 },
+  { id: "msg_50",       emoji: "🗣️",  name: "会話マスター",    desc: "50回メッセージを送った",         cond: s => s.totalMessages >= 50 },
+  { id: "msg_100",      emoji: "🎖️",  name: "ベテラン練習生",  desc: "100回メッセージを送った",        cond: s => s.totalMessages >= 100 },
+  { id: "streak_3",     emoji: "🔥", name: "3日連続！",        desc: "3日連続で練習した",              cond: s => s.streak >= 3 },
+  { id: "streak_7",     emoji: "🌟", name: "1週間継続！",      desc: "7日連続で練習した",              cond: s => s.streak >= 7 },
+  { id: "streak_30",    emoji: "🏆", name: "継続の達人",       desc: "30日連続で練習した",             cond: s => s.streak >= 30 },
+  { id: "vocab_5",      emoji: "📚", name: "単語好き",         desc: "単語メモを5個以上追加した",      cond: s => s.vocabCount >= 5 },
+  { id: "vocab_20",     emoji: "📖", name: "単語コレクター",   desc: "単語メモを20個以上追加した",     cond: s => s.vocabCount >= 20 },
+  { id: "mistake_5",    emoji: "📒", name: "失敗から学ぶ",     desc: "まちがいノートが5件たまった",    cond: s => (s.totalMistakes || 0) >= 5 },
+  { id: "perfect_5",    emoji: "✅", name: "パーフェクター",   desc: "完璧！を5回もらった",            cond: s => (s.totalPerfect  || 0) >= 5 },
+  { id: "all_themes",   emoji: "🌍", name: "全テーマ制覇！",   desc: "全6テーマで会話した",            cond: s => (s.themesUsed || []).length >= 6 },
+  { id: "theme_kpop",   emoji: "🎵", name: "K-popファン",      desc: "K-popテーマで会話した",          cond: s => (s.themesUsed || []).includes("kpop") },
+  { id: "theme_game",   emoji: "🎮", name: "ゲーマー",         desc: "ゲームテーマで会話した",         cond: s => (s.themesUsed || []).includes("game") },
+  { id: "night_owl",    emoji: "🦉", name: "夜ふかし勉強家",   desc: "深夜（0〜4時）に練習した",       cond: s => s.hasNightSession },
+];
+
+function loadAchievStats() {
+  try { return JSON.parse(localStorage.getItem("korean_achiev_stats") || "{}"); }
+  catch { return {}; }
+}
+function saveAchievStats(s) { localStorage.setItem("korean_achiev_stats", JSON.stringify(s)); }
+function loadUnlockedAchievs() {
+  try { return JSON.parse(localStorage.getItem("korean_achievements") || "[]"); }
+  catch { return []; }
+}
+function saveUnlockedAchievs(ids) { localStorage.setItem("korean_achievements", JSON.stringify(ids)); }
+
 /* ════════════════════════════════════════
    メインコンポーネント
 ════════════════════════════════════════ */
@@ -193,6 +223,15 @@ export default function App() {
     catch { return []; }
   });
 
+  /* オープニングアニメーション */
+  const [openingState, setOpeningState] = useState("in"); // "in"|"hold"|"out"|"done"
+
+  /* 実績 */
+  const [unlockedAchievs, setUnlockedAchievs] = useState(() => loadUnlockedAchievs());
+  const [newAchievement,  setNewAchievement]  = useState(null);
+  const [showAchievModal, setShowAchievModal] = useState(false);
+  const achievQueueRef = useRef([]);
+
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
   const recRef    = useRef(null);
@@ -217,16 +256,56 @@ export default function App() {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
   useEffect(() => { localStorage.setItem("korean_vocab", JSON.stringify(vocab)); }, [vocab]);
 
+  /* オープニングアニメーション タイマー */
+  useEffect(() => {
+    const t1 = setTimeout(() => setOpeningState("hold"), 600);
+    const t2 = setTimeout(() => setOpeningState("out"),  2400);
+    const t3 = setTimeout(() => setOpeningState("done"), 3100);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
+
   /* 日本語訳トグル */
   const toggleJA = useCallback((idx) => {
     setMessages(prev => prev.map((m, i) => i === idx ? { ...m, showJA: !m.showJA } : m));
   }, []);
 
+  /* 実績チェック & アンロック */
+  const checkAndUnlock = useCallback((extraStats = {}) => {
+    const sd          = loadStreakData();
+    const base        = loadAchievStats();
+    const vocabCount  = JSON.parse(localStorage.getItem("korean_vocab") || "[]").length;
+    const fullStats   = { ...base, streak: sd.streak || 0, vocabCount, ...extraStats };
+    const alreadyUnlocked = loadUnlockedAchievs();
+
+    const newlyUnlocked = ACHIEVEMENTS.filter(
+      a => !alreadyUnlocked.includes(a.id) && a.cond(fullStats)
+    );
+    if (newlyUnlocked.length === 0) return;
+
+    const updated = [...alreadyUnlocked, ...newlyUnlocked.map(a => a.id)];
+    saveUnlockedAchievs(updated);
+    setUnlockedAchievs(updated);
+
+    /* トースト通知をキューで順番に表示 */
+    achievQueueRef.current.push(...newlyUnlocked);
+    if (achievQueueRef.current.length === newlyUnlocked.length) {
+      const showNext = () => {
+        const next = achievQueueRef.current.shift();
+        if (!next) return;
+        setNewAchievement(next);
+        setTimeout(() => { setNewAchievement(null); setTimeout(showNext, 400); }, 3200);
+      };
+      showNext();
+    }
+  }, []);
+
   /* 単語メモ操作 */
   const addVocab = () => {
     if (!newWord.trim()) return;
-    setVocab(prev => [...prev, { word: newWord.trim(), meaning: newMeaning.trim() }]);
+    const updated = [...vocab, { word: newWord.trim(), meaning: newMeaning.trim() }];
+    setVocab(updated);
     setNewWord(""); setNewMeaning("");
+    checkAndUnlock({ vocabCount: updated.length });
   };
   const deleteVocab = (i) => setVocab(prev => prev.filter((_, idx) => idx !== i));
 
@@ -309,6 +388,26 @@ export default function App() {
               return updated;
             });
           }
+
+          /* 実績 stats 更新 & チェック */
+          {
+            const st       = loadAchievStats();
+            const hour     = new Date().getHours();
+            const nowTheme = (currentTheme || theme)?.id;
+            const newStats = {
+              ...st,
+              totalMessages: (st.totalMessages || 0) + 1,
+              totalPerfect:  (st.totalPerfect  || 0) + (data.text.includes("✅ 完璧です！") ? 1 : 0),
+              totalMistakes: (st.totalMistakes || 0) + (mistake ? 1 : 0),
+              themesUsed:    nowTheme && !(st.themesUsed || []).includes(nowTheme)
+                               ? [...(st.themesUsed || []), nowTheme]
+                               : (st.themesUsed || []),
+              hasNightSession: st.hasNightSession || (hour >= 0 && hour < 4),
+            };
+            saveAchievStats(newStats);
+            checkAndUnlock(newStats);
+          }
+
           if (autoSpeak && korean) {
             setIsSpeaking(true);
             speakKorean(korean, () => setIsSpeaking(false));
@@ -413,6 +512,13 @@ export default function App() {
               {autoSpeak ? "🔊" : "🔇"}
             </button>
           )}
+          <button style={{ ...c.iconBtn, position: "relative" }}
+                  onClick={() => setShowAchievModal(true)} title="実績">
+            🏆
+            <span style={{ ...c.achievCountBadge }}>
+              {unlockedAchievs.length}/{ACHIEVEMENTS.length}
+            </span>
+          </button>
           {/* ストリーク表示 */}
           <div
             style={{ ...c.streakChip, ...(streak >= 7 ? c.streakChipHot : streak > 0 ? c.streakChipWarm : c.streakChipCold) }}
@@ -756,6 +862,96 @@ export default function App() {
         </div>
       </div>
 
+      {/* ══ オープニングアニメーション ══ */}
+      {openingState !== "done" && (
+        <div style={{
+          ...c.openingOverlay,
+          animation: openingState === "in"   ? "openingIn 0.6s ease-out forwards"
+                   : openingState === "out"  ? "openingOut 0.7s ease-in forwards"
+                   : "none",
+          opacity:   openingState === "hold" ? 1 : undefined,
+        }}>
+          {/* 桜パーティクル */}
+          {["10%","25%","40%","55%","70%","85%"].map((left, i) => (
+            <div key={i} style={{ ...c.sakura, left, animationDelay: `${i * 0.3}s` }}>🌸</div>
+          ))}
+          <div style={c.openingCard}>
+            <div style={{ fontSize: 44, lineHeight: 1, animation: "popIn 0.5s 0.3s both" }}>🇰🇷</div>
+            <div style={c.openingTitle}>한국어 연습</div>
+            <div style={c.openingSubtitle}>ハングル検定5級 会話練習</div>
+            <div style={c.openingAvatarWrap}>
+              <img src="/sona.png" alt="소나 선생님" style={c.openingAvatarImg} draggable={false}/>
+            </div>
+            <div style={c.openingName}>소나 선생님</div>
+            <div style={c.openingMsg}>안녕하세요！ 오늘도 같이 공부해요～ 🌸</div>
+            <div style={c.openingHint}>はじめましょう！</div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ 実績トースト通知 ══ */}
+      {newAchievement && (
+        <div style={c.achievToast}>
+          <div style={{ fontSize: 30, lineHeight: 1, flexShrink: 0 }}>{newAchievement.emoji}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, color: "#e85d6b", fontWeight: 700, marginBottom: 1 }}>
+              🏆 実績解除！
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>{newAchievement.name}</div>
+            <div style={{ fontSize: 10, color: "#888" }}>{newAchievement.desc}</div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ 実績モーダル ══ */}
+      {showAchievModal && (
+        <div style={c.overlay} onClick={() => setShowAchievModal(false)}>
+          <div style={c.modal} onClick={e => e.stopPropagation()}>
+            <div style={c.modalHeader}>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>🏆 実績</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11, opacity: 0.85 }}>
+                  {unlockedAchievs.length} / {ACHIEVEMENTS.length} 解除
+                </span>
+                <button style={c.closeBtn} onClick={() => setShowAchievModal(false)}>✕</button>
+              </div>
+            </div>
+            {/* 進捗バー */}
+            <div style={{ padding: "8px 16px 0", background: "#fff0f2" }}>
+              <div style={{ background: "#f0d9d9", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                <div style={{
+                  background: "linear-gradient(90deg, #e85d6b, #ff8c98)",
+                  height: "100%", borderRadius: 6,
+                  width: `${(unlockedAchievs.length / ACHIEVEMENTS.length) * 100}%`,
+                  transition: "width 0.5s ease",
+                }}/>
+              </div>
+            </div>
+            <div style={{ ...c.modalBody, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {ACHIEVEMENTS.map(a => {
+                const isUnlocked = unlockedAchievs.includes(a.id);
+                return (
+                  <div key={a.id} style={{ ...c.achievItem, ...(isUnlocked ? c.achievItemOn : {}) }}>
+                    <div style={{ fontSize: 26, lineHeight: 1, filter: isUnlocked ? "none" : "grayscale(1)", opacity: isUnlocked ? 1 : 0.35 }}>
+                      {isUnlocked ? a.emoji : "🔒"}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: isUnlocked ? "#333" : "#ccc" }}>
+                        {a.name}
+                      </div>
+                      <div style={{ fontSize: 9, color: isUnlocked ? "#888" : "#ddd", marginTop: 1, lineHeight: 1.3 }}>
+                        {a.desc}
+                      </div>
+                    </div>
+                    {isUnlocked && <div style={c.achievCheck}>✓</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ══ チェンジログモーダル ══ */}
       {showChangelog && (
         <div style={c.overlay} onClick={() => setShowChangelog(false)}>
@@ -794,6 +990,40 @@ export default function App() {
         @keyframes bounce {
           0%,80%,100% { transform: translateY(0); }
           40%          { transform: translateY(-6px); }
+        }
+        @keyframes openingIn {
+          0%   { opacity: 0; transform: scale(1.04); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes openingOut {
+          0%   { opacity: 1; transform: scale(1); }
+          100% { opacity: 0; transform: scale(0.96); }
+        }
+        @keyframes popIn {
+          0%   { opacity: 0; transform: scale(0.5) rotate(-10deg); }
+          70%  { transform: scale(1.15) rotate(3deg); }
+          100% { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
+        @keyframes slideUp {
+          0%   { opacity: 0; transform: translateY(24px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes sakuraFall {
+          0%   { transform: translateY(-30px) rotate(0deg);  opacity: 0; }
+          10%  { opacity: 1; }
+          90%  { opacity: 0.8; }
+          100% { transform: translateY(110vh) rotate(540deg); opacity: 0; }
+        }
+        @keyframes toastSlide {
+          0%   { opacity: 0; transform: translateX(110%); }
+          15%  { opacity: 1; transform: translateX(0); }
+          80%  { opacity: 1; transform: translateX(0); }
+          100% { opacity: 0; transform: translateX(110%); }
+        }
+        @keyframes achievPop {
+          0%   { transform: scale(0.8); opacity: 0; }
+          60%  { transform: scale(1.08); }
+          100% { transform: scale(1);   opacity: 1; }
         }
       `}</style>
     </div>
@@ -986,4 +1216,81 @@ const c = {
   clDate:     { fontSize: 11, color: "#aaa", marginLeft: "auto" },
   clList:     { listStyle: "none", display: "flex", flexDirection: "column", gap: 4 },
   clItem:     { fontSize: 13, color: "#555", lineHeight: 1.4 },
+  /* ── オープニングアニメーション ── */
+  openingOverlay: {
+    position: "fixed", inset: 0, zIndex: 2000,
+    background: "linear-gradient(160deg, #ff7b8e 0%, #e85d6b 40%, #c94455 100%)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    overflow: "hidden",
+  },
+  openingCard: {
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+    animation: "slideUp 0.6s 0.2s both",
+    textAlign: "center", padding: "0 20px",
+  },
+  openingTitle: {
+    fontSize: 32, fontWeight: 900, color: "#fff",
+    letterSpacing: 2, textShadow: "0 2px 12px rgba(0,0,0,.25)",
+    animation: "slideUp 0.5s 0.4s both",
+  },
+  openingSubtitle: {
+    fontSize: 13, color: "rgba(255,255,255,.85)", fontWeight: 600,
+    animation: "slideUp 0.5s 0.55s both",
+  },
+  openingAvatarWrap: {
+    width: 110, height: 110, borderRadius: "50%", overflow: "hidden",
+    border: "4px solid rgba(255,255,255,.8)",
+    boxShadow: "0 6px 28px rgba(0,0,0,.25)",
+    animation: "popIn 0.6s 0.2s both",
+    marginTop: 8,
+  },
+  openingAvatarImg: { width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" },
+  openingName: {
+    fontSize: 15, fontWeight: 700, color: "#fff",
+    animation: "slideUp 0.5s 0.7s both",
+  },
+  openingMsg: {
+    fontSize: 14, color: "rgba(255,255,255,.9)", lineHeight: 1.5,
+    animation: "slideUp 0.5s 0.85s both",
+  },
+  openingHint: {
+    fontSize: 11, color: "rgba(255,255,255,.6)", marginTop: 4,
+    animation: "slideUp 0.5s 1.0s both",
+  },
+  sakura: {
+    position: "absolute", top: -40, fontSize: 18,
+    animation: "sakuraFall 3s linear infinite",
+    pointerEvents: "none", userSelect: "none",
+  },
+  /* ── 実績トースト ── */
+  achievToast: {
+    position: "fixed", bottom: 80, right: 16, zIndex: 1500,
+    background: "#fff", borderRadius: 14,
+    boxShadow: "0 4px 24px rgba(232,93,107,.3)",
+    border: "1.5px solid #fce4e8",
+    padding: "12px 16px", display: "flex", alignItems: "center", gap: 12,
+    maxWidth: 260, animation: "toastSlide 3.6s ease both",
+  },
+  /* ── 実績モーダルアイテム ── */
+  achievItem: {
+    background: "#fafafa", border: "1px solid #f0d9d9", borderRadius: 10,
+    padding: "8px 10px", display: "flex", alignItems: "center", gap: 8,
+    transition: "all .2s",
+  },
+  achievItemOn: {
+    background: "#fff0f2", border: "1px solid #f5c6cc",
+    boxShadow: "0 1px 6px rgba(232,93,107,.12)",
+  },
+  achievCheck: {
+    color: "#27ae60", fontWeight: 700, fontSize: 13, flexShrink: 0,
+  },
+  /* ── 実績カウントバッジ（ヘッダー） ── */
+  achievCountBadge: {
+    position: "absolute", top: -4, right: -4,
+    background: "#ffdd57", color: "#a0620a",
+    borderRadius: 8, fontSize: 8, fontWeight: 700,
+    padding: "1px 4px", lineHeight: 1.4,
+    border: "1.5px solid #e85d6b",
+    pointerEvents: "none",
+  },
 };

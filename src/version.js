@@ -1,6 +1,15 @@
-export const CURRENT_VERSION = "1.9.0";
+export const CURRENT_VERSION = "2.0.0";
 
 export const CHANGELOG = [
+  {
+    version: "2.0.0",
+    date: "2026/05/27",
+    changes: [
+      "🏆 実績システム追加（15種類・会話回数/ストリーク/単語/テーマ制覇など）",
+      "🎬 オープニングアニメーション追加（桜エフェクト付き）",
+      "🔔 実績解除時にトースト通知をポップアップ表示",
+    ],
+  },
   {
     version: "1.9.0",
     date: "2026/05/27",
