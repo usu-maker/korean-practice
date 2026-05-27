@@ -326,6 +326,11 @@ export default function App() {
   const [missionDone,    setMissionDone]    = useState(() => localStorage.getItem(`mission_${todayStr()}`) === "done");
   const [missionVisible, setMissionVisible] = useState(true);
 
+  /* ── スマホ対応 ── */
+  const [isMobile,      setIsMobile]      = useState(() => window.innerWidth <= 768);
+  const [menuOpen,      setMenuOpen]      = useState(false);
+  const [mobilePanelTab,setMobilePanelTab]= useState(null); // null | "vocab" | "mistakes" | "phrases"
+
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
   const recRef    = useRef(null);
@@ -366,6 +371,17 @@ export default function App() {
     const t2 = setTimeout(() => setOpeningState("out"),  2400);
     const t3 = setTimeout(() => setOpeningState("done"), 3100);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
+
+  /* スマホ判定（リサイズ対応） */
+  useEffect(() => {
+    const check = () => {
+      const m = window.innerWidth <= 768;
+      setIsMobile(m);
+      if (!m) { setMenuOpen(false); setMobilePanelTab(null); }
+    };
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
   }, []);
 
   /* 日本語訳トグル */
@@ -634,88 +650,159 @@ export default function App() {
   ];
 
   return (
-    <div style={c.app}>
+    <div style={{ ...c.app, paddingBottom: isMobile ? 56 : 0 }}>
 
       {/* ══ ヘッダー ══ */}
       <div style={c.header}>
         <div style={c.hLeft}>
-          {/* ソナ先生アバターボタン → プロフィール */}
-          <button style={c.headerAvatarBtn} onClick={() => setShowProfileModal(true)}
-                  title="소나 선생님のプロフィール">
-            <img src="/sona.png" alt="소나 선생님" style={c.headerAvatarImg} draggable={false}/>
-          </button>
+          {/* ソナ先生アバターボタン → プロフィール（PC のみ） */}
+          {!isMobile && (
+            <button style={c.headerAvatarBtn} onClick={() => setShowProfileModal(true)}
+                    title="소나 선생님のプロフィール">
+              <img src="/sona.png" alt="소나 선생님" style={c.headerAvatarImg} draggable={false}/>
+            </button>
+          )}
           <div>
             <div style={c.hTitle}>소나톡</div>
-            <div style={c.hSub}>ハングル検定5級 会話練習</div>
+            {!isMobile && <div style={c.hSub}>ハングル検定5級 会話練習</div>}
           </div>
         </div>
         <div style={c.hRight}>
-          {ttsOk && (
-            <button style={c.iconBtn} onClick={() => setAutoSpeak(v => !v)}
-                    title={autoSpeak ? "自動読み上げON" : "自動読み上げOFF"}>
-              {autoSpeak ? "🔊" : "🔇"}
+          {isMobile ? (
+            /* スマホ: ハンバーガーボタン */
+            <button style={c.hamburgerBtn} onClick={() => setMenuOpen(v => !v)}>
+              {menuOpen ? "✕" : "☰"}
             </button>
+          ) : (
+            /* PC: 通常アイコン */
+            <>
+              {ttsOk && (
+                <button style={c.iconBtn} onClick={() => setAutoSpeak(v => !v)}
+                        title={autoSpeak ? "自動読み上げON" : "自動読み上げOFF"}>
+                  {autoSpeak ? "🔊" : "🔇"}
+                </button>
+              )}
+              <button style={{ ...c.iconBtn, position: "relative" }}
+                      onClick={() => setShowAchievModal(true)} title="実績">
+                🏆
+                <span style={{ ...c.achievCountBadge }}>
+                  {unlockedAchievs.length}/{ACHIEVEMENTS.length}
+                </span>
+              </button>
+              <button style={c.iconBtn} onClick={() => setShowInfoModal(true)} title="アプリについて">
+                ℹ️
+              </button>
+              {/* ストリーク表示 */}
+              <div
+                style={{ ...c.streakChip, ...(streak >= 7 ? c.streakChipHot : streak > 0 ? c.streakChipWarm : c.streakChipCold) }}
+                title={todayDone ? `${streak}日連続練習中！` : "今日練習してストリークを守ろう"}
+              >
+                <span style={{ fontSize: 14 }}>{streak > 0 ? "🔥" : "🌱"}</span>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>{streak}</span>
+                <span style={{ fontSize: 10, opacity: 0.85 }}>日</span>
+              </div>
+              <div style={c.badge}>5급</div>
+              <button
+                style={c.verBtn}
+                onClick={() => { setShowChangelog(true); localStorage.setItem("seen_version", CURRENT_VERSION); }}
+                title="アップデート履歴"
+              >
+                v{CURRENT_VERSION}
+                {isNewVersion && <span style={c.newDot}/>}
+              </button>
+            </>
           )}
-          <button style={{ ...c.iconBtn, position: "relative" }}
-                  onClick={() => setShowAchievModal(true)} title="実績">
-            🏆
-            <span style={{ ...c.achievCountBadge }}>
-              {unlockedAchievs.length}/{ACHIEVEMENTS.length}
-            </span>
-          </button>
-          <button style={c.iconBtn} onClick={() => setShowInfoModal(true)} title="アプリについて">
-            ℹ️
-          </button>
-          {/* ストリーク表示 */}
-          <div
-            style={{ ...c.streakChip, ...(streak >= 7 ? c.streakChipHot : streak > 0 ? c.streakChipWarm : c.streakChipCold) }}
-            title={todayDone ? `${streak}日連続練習中！` : "今日練習してストリークを守ろう"}
-          >
-            <span style={{ fontSize: 14 }}>{streak > 0 ? "🔥" : "🌱"}</span>
-            <span style={{ fontWeight: 700, fontSize: 13 }}>{streak}</span>
-            <span style={{ fontSize: 10, opacity: 0.85 }}>日</span>
-          </div>
-          <div style={c.badge}>5급</div>
-          <button
-            style={c.verBtn}
-            onClick={() => { setShowChangelog(true); localStorage.setItem("seen_version", CURRENT_VERSION); }}
-            title="アップデート履歴"
-          >
-            v{CURRENT_VERSION}
-            {isNewVersion && <span style={c.newDot}/>}
-          </button>
         </div>
+
+        {/* ハンバーガードロップダウン（スマホのみ） */}
+        {isMobile && menuOpen && (
+          <div style={c.hamburgerMenu}>
+            {ttsOk && (
+              <button style={c.hamburgerItem}
+                      onClick={() => { setAutoSpeak(v => !v); setMenuOpen(false); }}>
+                {autoSpeak ? "🔊" : "🔇"}　自動読み上げ {autoSpeak ? "ON" : "OFF"}
+              </button>
+            )}
+            <button style={c.hamburgerItem}
+                    onClick={() => { setShowAchievModal(true); setMenuOpen(false); }}>
+              🏆　実績 ({unlockedAchievs.length}/{ACHIEVEMENTS.length})
+            </button>
+            <button style={c.hamburgerItem}
+                    onClick={() => { setShowInfoModal(true); setMenuOpen(false); }}>
+              ℹ️　アプリについて
+            </button>
+            <div style={{ ...c.hamburgerItem, cursor: "default" }}>
+              {streak > 0 ? "🔥" : "🌱"}　連続 {streak}日
+              {todayDone ? "　✅ 今日完了！" : ""}
+            </div>
+            <button style={c.hamburgerItem}
+                    onClick={() => {
+                      setShowChangelog(true);
+                      localStorage.setItem("seen_version", CURRENT_VERSION);
+                      setMenuOpen(false);
+                    }}>
+              📋　v{CURRENT_VERSION}{isNewVersion ? " 🆕 新バージョン！" : ""}
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={c.body}>
         {/* ══ チャット列 ══ */}
         <div style={c.chatCol}>
 
-          {/* ── アバターパネル（上部中央） ── */}
-          <div style={c.avatarPanel}>
-            {/* 円形アバター：待機中→sona.png静止画、話し中→talking.gif */}
-            <div style={{ ...c.avatarWrap, cursor: "pointer" }}
-                 onClick={() => setShowProfileModal(true)} title="프로필 보기">
-              <img
-                src={isSpeaking ? "/sona-talking.gif" : "/sona.png"}
-                alt="소나 선생님"
-                style={c.avatarImg}
-                draggable={false}
-              />
-            </div>
-            <div style={{ ...c.avatarName, cursor: "pointer" }}
-                 onClick={() => setShowProfileModal(true)}>소나 선생님</div>
-            <div style={c.avatarStatus}>
-              {isSpeaking ? "🗣 話し中…"
-               : loading  ? "💭 考え中…"
-               : theme    ? `${theme.emoji} ${theme.label}（${theme.ko}）`
-               :             "✨ 待機中"}
-            </div>
-            {/* ④ 会話リセットボタン */}
-            {started && (
-              <button style={c.resetBtn} onClick={resetConversation} title="会話をリセット">
-                🔄 リセット
-              </button>
+          {/* ── アバターパネル（上部中央 / スマホはコンパクト横並び） ── */}
+          <div style={{ ...c.avatarPanel, ...(isMobile ? c.avatarPanelMobile : {}) }}>
+            {isMobile ? (
+              /* スマホ: コンパクト横並び */
+              <>
+                <div style={{ ...c.avatarWrap, width: 52, height: 52, cursor: "pointer", flexShrink: 0 }}
+                     onClick={() => setShowProfileModal(true)}>
+                  <img src={isSpeaking ? "/sona-talking.gif" : "/sona.png"}
+                       alt="소나 선생님" style={c.avatarImg} draggable={false}/>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#333", cursor: "pointer", lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                       onClick={() => setShowProfileModal(true)}>소나 선생님</div>
+                  <div style={{ ...c.avatarStatus, fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {isSpeaking ? "🗣 話し中…"
+                     : loading  ? "💭 考え中…"
+                     : theme    ? `${theme.emoji} ${theme.label}`
+                     :             "✨ 待機中"}
+                  </div>
+                </div>
+                {started && (
+                  <button style={{ ...c.resetBtn, padding: "4px 10px", fontSize: 11, flexShrink: 0 }}
+                          onClick={resetConversation} title="リセット">🔄</button>
+                )}
+              </>
+            ) : (
+              /* PC: 通常縦並び */
+              <>
+                <div style={{ ...c.avatarWrap, cursor: "pointer" }}
+                     onClick={() => setShowProfileModal(true)} title="프로필 보기">
+                  <img
+                    src={isSpeaking ? "/sona-talking.gif" : "/sona.png"}
+                    alt="소나 선생님"
+                    style={c.avatarImg}
+                    draggable={false}
+                  />
+                </div>
+                <div style={{ ...c.avatarName, cursor: "pointer" }}
+                     onClick={() => setShowProfileModal(true)}>소나 선생님</div>
+                <div style={c.avatarStatus}>
+                  {isSpeaking ? "🗣 話し中…"
+                   : loading  ? "💭 考え中…"
+                   : theme    ? `${theme.emoji} ${theme.label}（${theme.ko}）`
+                   :             "✨ 待機中"}
+                </div>
+                {/* ④ 会話リセットボタン */}
+                {started && (
+                  <button style={c.resetBtn} onClick={resetConversation} title="会話をリセット">
+                    🔄 リセット
+                  </button>
+                )}
+              </>
             )}
           </div>
 
@@ -911,8 +998,8 @@ export default function App() {
           )}
         </div>
 
-        {/* ══ サイドバー（単語メモ ＋ まちがいノート ＋ 学習履歴） ══ */}
-        <div style={c.side}>
+        {/* ══ サイドバー（PC のみ） ══ */}
+        {!isMobile && <div style={c.side}>
           {/* タブ切り替え */}
           <div style={c.sideTabs}>
             <button
@@ -1096,8 +1183,157 @@ export default function App() {
               }
             </div>
           )}
-        </div>
+        </div>}
       </div>
+
+      {/* ══ スマホ用 サイドパネル（タブタップで表示） ══ */}
+      {isMobile && mobilePanelTab && (
+        <div style={c.mobileSidePanel}>
+          <div style={c.mobilePanelHeader}>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>
+              {mobilePanelTab === "vocab"    ? "📝 単語メモ"
+               : mobilePanelTab === "mistakes" ? "📒 まちがいノート"
+               :                                 "💬 フレーズ集"}
+            </span>
+            <button
+              style={{ background: "rgba(255,255,255,.25)", border: "none", color: "#fff",
+                       borderRadius: "50%", width: 28, height: 28, fontSize: 13,
+                       cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              onClick={() => setMobilePanelTab(null)}>✕</button>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px",
+                        display: "flex", flexDirection: "column", gap: 8 }}>
+
+            {mobilePanelTab === "vocab" ? (
+              /* ── 単語メモ ── */
+              <>
+                {/* AI単語提案 */}
+                {vocabSugs.length > 0 && (
+                  <div style={c.sugBox}>
+                    <div style={c.sugTitle}>💡 追加候補</div>
+                    {vocabSugs.map((s, i) => (
+                      <div key={i} style={c.sugItem}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ fontWeight: 700, fontSize: 12, color: "#333" }}>{s.word}</span>
+                          <span style={{ fontSize: 11, color: "#999", marginLeft: 4 }}>{s.meaning}</span>
+                        </div>
+                        <button style={c.sugAddBtn} onClick={() => {
+                          const updated = [...vocab, { word: s.word, meaning: s.meaning }];
+                          setVocab(updated);
+                          setVocabSugs(prev => prev.filter((_, j) => j !== i));
+                          checkAndUnlock({ vocabCount: updated.length });
+                        }}>＋</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* フラッシュカード起動 */}
+                {vocab.length >= 1 && (
+                  <button style={{ ...c.fcStartBtn, width: "100%", padding: "8px 0", fontSize: 13 }}
+                          onClick={() => { startFlashcard(); setMobilePanelTab(null); }}>
+                    🎴 フラッシュカードクイズ
+                  </button>
+                )}
+                {/* 追加フォーム */}
+                <div style={c.vocabForm}>
+                  <input style={c.vocabInput} placeholder="단어 (韓国語)"
+                         value={newWord} onChange={e => setNewWord(e.target.value)}
+                         onKeyDown={e => e.key === "Enter" && addVocab()}/>
+                  <input style={c.vocabInput} placeholder="意味 (日本語)"
+                         value={newMeaning} onChange={e => setNewMeaning(e.target.value)}
+                         onKeyDown={e => e.key === "Enter" && addVocab()}/>
+                  <button style={{ ...c.vocabAddBtn, opacity: !newWord.trim() ? 0.4 : 1 }}
+                          onClick={addVocab} disabled={!newWord.trim()}>＋ 追加</button>
+                </div>
+                {/* 単語リスト */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {vocab.length === 0
+                    ? <div style={c.sideEmpty}>覚えたい単語を追加しましょう</div>
+                    : vocab.map((v, i) => (
+                        <div key={i} style={c.vocabItem}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: "#333" }}>{v.word}</div>
+                            {v.meaning && <div style={{ fontSize: 11, color: "#999", marginTop: 1 }}>{v.meaning}</div>}
+                          </div>
+                          <button style={c.vocabDelBtn} onClick={() => deleteVocab(i)}>×</button>
+                        </div>
+                      ))
+                  }
+                </div>
+              </>
+            ) : mobilePanelTab === "mistakes" ? (
+              /* ── まちがいノート ── */
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#888" }}>{mistakes.length}件</span>
+                  {mistakes.length > 0 && (
+                    <button style={c.copyBtn} onClick={copyMistakes}>コピー</button>
+                  )}
+                </div>
+                {mistakes.length === 0
+                  ? <div style={c.sideEmpty}>ミスが検出されると自動記録されます</div>
+                  : mistakes.map((m, i) => (
+                      <div key={i} style={c.mistakeItem}>
+                        <div style={{ fontSize: 10, color: "#bbb", marginBottom: 2 }}>{m.date}</div>
+                        <div style={{ fontSize: 12, color: "#e85d6b", fontWeight: 700, lineHeight: 1.3, wordBreak: "break-all" }}>
+                          {m.input}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#27ae60", fontWeight: 600, lineHeight: 1.3, wordBreak: "break-all" }}>
+                          → {m.correction}
+                        </div>
+                        <div style={{ fontSize: 10, color: "#888", lineHeight: 1.4, marginTop: 2 }}>
+                          {m.explanation}
+                        </div>
+                      </div>
+                    ))
+                }
+              </>
+            ) : (
+              /* ── フレーズ集 ── */
+              <>
+                <div style={{ fontSize: 11, color: "#bbb", textAlign: "center" }}>
+                  タップでテキストボックスに入力
+                </div>
+                {PHRASES.map(cat => (
+                  <div key={cat.cat}>
+                    <div style={c.phraseCatTitle}>{cat.cat}</div>
+                    {cat.items.map((p, i) => (
+                      <button key={i} style={c.phraseItem}
+                              onClick={() => {
+                                setInput(p.ko);
+                                setMobilePanelTab(null);
+                                setTimeout(() => inputRef.current?.focus(), 100);
+                              }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: "#e85d6b" }}>{p.ko}</div>
+                        <div style={{ fontSize: 11, color: "#888" }}>{p.ja}</div>
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ スマホ用 ボトムタブバー ══ */}
+      {isMobile && (
+        <div style={c.mobileTabBar}>
+          {[
+            { id: "vocab",    label: "📝 単語" },
+            { id: "mistakes", label: "📒 ミス" },
+            { id: "phrases",  label: "💬 フレーズ" },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              style={{ ...c.mobileTabBtn, ...(mobilePanelTab === tab.id ? c.mobileTabBtnOn : {}) }}
+              onClick={() => setMobilePanelTab(p => p === tab.id ? null : tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ══ ① フラッシュカードモーダル ══ */}
       {fc.active && (
@@ -1489,6 +1725,13 @@ export default function App() {
           60%  { transform: scale(1.08); }
           100% { transform: scale(1);   opacity: 1; }
         }
+
+        /* ── スマホ向け追加スタイル ── */
+        @media (max-width: 768px) {
+          * { -webkit-tap-highlight-color: transparent; }
+          button { touch-action: manipulation; }
+          textarea { font-size: 16px !important; }  /* iOS ズーム防止 */
+        }
       `}</style>
     </div>
   );
@@ -1502,7 +1745,8 @@ const c = {
                 background: "#fdf6f0", fontFamily: "'Noto Sans JP','Noto Sans KR',sans-serif" },
   /* Header */
   header:     { background: "#e85d6b", color: "#fff", padding: "11px 16px",
-                display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 },
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                flexShrink: 0, position: "relative", zIndex: 100 },
   hLeft:      { display: "flex", alignItems: "center", gap: 10 },
   hRight:     { display: "flex", alignItems: "center", gap: 8 },
   hTitle:     { fontSize: 16, fontWeight: 700 },
@@ -1897,5 +2141,72 @@ const c = {
     background: "#fff", border: "1px solid #f0d9d9", borderRadius: 8,
     padding: "5px 8px", marginBottom: 3, cursor: "pointer",
     fontFamily: "inherit", lineHeight: 1.4,
+  },
+
+  /* ══ スマホ対応スタイル ══ */
+
+  /* アバターパネル: スマホは横並びコンパクト */
+  avatarPanelMobile: {
+    flexDirection: "row",
+    padding: "8px 12px",
+    gap: 10,
+    alignItems: "center",
+  },
+
+  /* ハンバーガーボタン */
+  hamburgerBtn: {
+    background: "rgba(255,255,255,.2)", border: "none", color: "#fff",
+    borderRadius: 8, padding: "5px 13px", fontSize: 22, cursor: "pointer",
+    lineHeight: 1, fontFamily: "inherit",
+  },
+
+  /* ハンバーガードロップダウン */
+  hamburgerMenu: {
+    position: "absolute", top: "100%", left: 0, right: 0,
+    background: "#d94e5c",
+    boxShadow: "0 6px 20px rgba(0,0,0,.25)",
+    display: "flex", flexDirection: "column",
+    zIndex: 500,
+  },
+  hamburgerItem: {
+    background: "none", border: "none",
+    borderBottom: "1px solid rgba(255,255,255,.15)",
+    color: "#fff", padding: "14px 18px",
+    fontSize: 14, cursor: "pointer",
+    fontFamily: "inherit", textAlign: "left", width: "100%",
+  },
+
+  /* ボトムタブバー */
+  mobileTabBar: {
+    position: "fixed", bottom: 0, left: 0, right: 0, height: 56,
+    background: "#fff", borderTop: "2px solid #f0d9d9",
+    display: "flex", alignItems: "stretch",
+    zIndex: 200, boxShadow: "0 -2px 12px rgba(0,0,0,.08)",
+  },
+  mobileTabBtn: {
+    flex: 1, background: "none", border: "none",
+    color: "#bbb", fontSize: 12, fontWeight: 700, cursor: "pointer",
+    fontFamily: "inherit", display: "flex", alignItems: "center",
+    justifyContent: "center", padding: "0 4px", transition: "all .15s",
+  },
+  mobileTabBtnOn: {
+    color: "#e85d6b", background: "#fff0f2",
+    borderTop: "2px solid #e85d6b",
+  },
+
+  /* モバイル サイドパネル（下から出るシート） */
+  mobileSidePanel: {
+    position: "fixed", bottom: 56, left: 0, right: 0,
+    height: "65vh", background: "#fff",
+    borderRadius: "18px 18px 0 0",
+    boxShadow: "0 -6px 28px rgba(0,0,0,.18)",
+    zIndex: 199, display: "flex", flexDirection: "column",
+    overflow: "hidden",
+  },
+  mobilePanelHeader: {
+    background: "#e85d6b", color: "#fff",
+    padding: "13px 16px",
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    flexShrink: 0,
   },
 };
